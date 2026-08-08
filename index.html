@@ -63,7 +63,7 @@
 <meta charset="UTF-8">
 <meta name="viewport" content="width=device-width, initial-scale=1.0, viewport-fit=cover">
 <meta name="theme-color" content="#c8901f">
-<title>Visitor Management</title>
+<title>Visitor &amp; Contractor Management</title>
 <link href="https://fonts.googleapis.com/css2?family=IBM+Plex+Sans:wght@400;500;600;700;800&family=IBM+Plex+Mono:wght@500;600&display=swap" rel="stylesheet">
 <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2"></script>
 <script src="https://cdn.jsdelivr.net/npm/qrcode-generator@1.4.4/qrcode.js"></script>
@@ -207,7 +207,7 @@
 <div id="loginOverlay" class="overlay">
   <div class="login-card">
     <img id="loginLogo" class="brand-logo" alt="JT.3rDegre3">
-    <div class="login-title">Visitor Management</div>
+    <div class="login-title">Visitor &amp; Contractor</div>
     <div id="loginSub" class="login-sub">Sign in to your account</div>
     <div class="tabs">
       <button class="btn active" id="tabSignin" onclick="setMode('signin')">Sign In</button>
@@ -255,7 +255,7 @@
 <div id="gate" class="overlay hidden">
   <div class="login-card" style="text-align:center;">
     <img id="gateLogo" class="brand-logo" alt="JT.3rDegre3">
-    <div class="login-title">Visitor Management isn't in your plan</div>
+    <div class="login-title">Visitor &amp; Contractor isn't in your plan</div>
     <div class="login-sub">Contact <b>support@jt3rdegre3.com</b> to add it.</div>
     <button class="btn full" onclick="doLogout()">Log out</button>
   </div>
@@ -265,7 +265,7 @@
 <div id="app" class="shell hidden">
   <div class="scrim" id="scrim"></div>
   <aside class="sidebar" id="sidebar">
-    <div class="side-brand"><img id="sideLogo" alt=""><div><div class="n" id="sideCompany">JT.3rDegre3</div><div class="s">Visitor Management</div></div></div>
+    <div class="side-brand"><img id="sideLogo" alt=""><div><div class="n" id="sideCompany">JT.3rDegre3</div><div class="s">Visitor &amp; Contractor</div></div></div>
     <div class="navsec">Front desk</div>
     <div class="navi active" data-view="dashboard"><span class="ic">📊</span> Dashboard</div>
     <div class="navi" data-view="kiosk-open"><span class="ic">🖥️</span> Open Kiosk</div>
@@ -409,16 +409,18 @@ var userEmail='', userName='', userRole='', isOwner=false, myId=null;
 var company={id:null,name:'',invite:'',email:''};
 var settings={induction_text:'',emergency_text:'',require_induction:false,require_vehicle:false,kiosk_token:''};
 var sites=[], visits=[];
-var PURPOSES=['Meeting','Delivery/Pickup','Maintenance/Repair','Personal Visit','Others'];
-var MAINT_TYPES=['General Work','Hot Work','Working at Height','Confined Space','Electrical / LOTO','Excavation','Lifting Operation'];
-var PRECAUTIONS={
-  'General Work':['Area barriered / signed','PPE worn','Housekeeping maintained','Supervisor briefed'],
-  'Hot Work':['Fire extinguisher present','Combustibles removed','Fire watch assigned','Gas test done','Hot work permit closed on completion'],
-  'Working at Height':['Harness & anchor point','Edge protection / guardrails','Ladder / MEWP inspected','Exclusion zone below','Rescue plan in place'],
-  'Confined Space':['Gas test done','Continuous monitoring','Ventilation in place','Standby person outside','Rescue plan in place'],
-  'Electrical / LOTO':['Isolation / LOTO applied','Proved dead','Insulated tools & PPE','Only competent persons'],
-  'Excavation':['Services scanned (CAT)','Shoring / battering','Edge protection','Access ladder','Spoil set back'],
-  'Lifting Operation':['Lift plan in place','Certified lifting gear','Exclusion zone','Banksman / slinger','Ground assessed']
+var PURPOSES=['Contractor','Delivery','Customer','Visitor','Others'];
+var PERMIT_TYPES=['General Work','Hot Work','Working at Height','Confined Space','Electrical / Isolation (LOTO)','Excavation','Lifting Operation','Blasting (Quarry)'];
+var COMMON_CONTROLS=['Valid risk assessment / method statement (RAMS) on site','Site induction completed','Correct PPE worn for the task','Work area barriered / signposted','First aider & emergency contacts known','Good housekeeping maintained'];
+var CHECKLISTS={
+  'General Work':['Tools & equipment inspected and fit for use','Slip / trip / fall hazards controlled','Adequate supervision arranged'],
+  'Hot Work':['Combustible materials removed or protected','Suitable fire extinguisher present at work point','Fire watch during work and 60 min after','Gas cylinders secured, upright and leak-checked','Atmosphere gas-tested where required'],
+  'Working at Height':['Access equipment inspected (scaffold / MEWP / ladder)','Fall protection: guardrails or harness & anchor point','Exclusion zone established below the work','Tools tethered — no dropped-object risk','Rescue / recovery plan in place'],
+  'Confined Space':['Atmosphere tested (oxygen, flammable, toxic)','Continuous gas monitoring in use','Forced ventilation provided','Trained standby person stationed at entrance','Rescue plan and equipment ready','Two-way communication established'],
+  'Electrical / Isolation (LOTO)':['Circuit isolated and locked-out / tagged-out','Proved dead before work starts','Insulated tools and correct PPE used','Only competent / authorised persons work live parts','Test instruments verified before and after'],
+  'Excavation':['Underground services located (drawings + CAT scan)','Shoring / battering / benching provided','Edge protection and barriers in place','Safe means of access (ladder) provided','Spoil kept back from excavation edge','Excavation inspected before each shift'],
+  'Lifting Operation':['Lift plan prepared and briefed to team','Crane / lifting gear and accessories certified in date','Appointed person and competent slinger / banksman','Exclusion zone established around the lift','Ground conditions and crane position assessed','Safe Working Load (SWL) not exceeded'],
+  'Blasting (Quarry)':['Competent shotfirer in charge of the blast','Blast design and shot-firing record prepared','Exclusion zone cleared, secured and guarded','Audible warning signals sounded (pre-blast and all-clear)','Detonator / radio-frequency precautions observed','Misfire procedure understood by all','Explosives securely stored and accounted for (magazine)','Post-blast inspection completed before re-entry','Complies with quarry / HSA blasting regulations']
 };
 
 function esc(s){return String(s==null?'':s).replace(/[&<>"]/g,function(c){return {'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;'}[c];});}
@@ -559,23 +561,54 @@ async function signOut(id){ var r=await sb.from('visits').update({status:'signed
 
 function openDetail(id){
   var v=null; for(var i=0;i<visits.length;i++){ if(visits[i].id===id){v=visits[i];break;} } if(!v) return;
-  var d=v.details||{}; var permit='';
-  if(d && d.work_permit_type){ permit='<div class="permit-box" style="margin-top:12px;"><div class="h">Work permit — '+esc(d.work_permit_type)+'</div>'+
+  var d=v.details||{}; var permit=''; var isPermit=!!(d && (d.permit || d.work_permit_type));
+  if(isPermit){ permit='<div class="permit-box" style="margin-top:12px;"><div class="h">📋 Permit to Work — '+esc(d.work_permit_type||'')+'</div>'+
+    (d.permit_no?'<div style="font-size:13px;"><b>Permit no:</b> '+esc(d.permit_no)+'</div>':'')+
     (d.work_desc?'<div style="font-size:13px;"><b>Work:</b> '+esc(d.work_desc)+'</div>':'')+
     (d.location?'<div style="font-size:13px;"><b>Location:</b> '+esc(d.location)+'</div>':'')+
-    ((d.precautions&&d.precautions.length)?'<div style="font-size:13px;margin-top:4px;"><b>Precautions:</b> '+d.precautions.map(esc).join(', ')+'</div>':'')+'</div>'; }
-  var m=document.getElementById('detailModal')||document.createElement('div');
-  var bg=document.getElementById('accountBg'); // reuse modal container styles via new modal
+    ((d.valid_from||d.valid_to)?'<div style="font-size:13px;"><b>Valid:</b> '+esc(d.valid_from||'—')+' → '+esc(d.valid_to||'—')+'</div>':'')+
+    (d.supervisor?'<div style="font-size:13px;"><b>Supervisor:</b> '+esc(d.supervisor)+(d.persons?' · '+esc(d.persons)+' person(s)':'')+'</div>':'')+
+    (((d.controls||d.precautions)||[]).length?'<div style="font-size:13px;margin-top:4px;"><b>Controls:</b> '+((d.controls||d.precautions)).map(esc).join(', ')+'</div>':'')+'</div>'; }
   var html='<h3 style="margin-top:0;">'+esc(v.visitor_name)+'</h3><div class="muted" style="font-size:13px;margin-bottom:8px;">'+esc(v.visitor_company||'')+(v.host?' · visiting '+esc(v.host):'')+'</div>'+
     '<div class="grid2" style="font-size:13.5px;"><div><b>Purpose</b><br>'+esc(v.purpose||'—')+'</div><div><b>Status</b><br>'+statusPill(v)+'</div>'+
     '<div><b>Vehicle</b><br>'+esc(v.vehicle_reg||'—')+'</div><div><b>Contact</b><br>'+esc(v.phone||'—')+'</div>'+
     '<div><b>Time in</b><br>'+fmtDT(v.signed_in_at)+'</div><div><b>Time out</b><br>'+(v.signed_out_at?fmtDT(v.signed_out_at):'—')+'</div>'+
     '<div><b>Duration</b><br>'+dur(v.signed_in_at,v.signed_out_at)+'</div></div>'+permit+
-    '<div style="display:flex;gap:8px;margin-top:16px;justify-content:flex-end;">'+(v.status==='on_site'?'<button class="btn red sm" id="dm-out">Sign out</button>':'')+'<button class="btn sm" id="dm-close">Close</button></div>';
+    '<div style="display:flex;gap:8px;margin-top:16px;justify-content:flex-end;flex-wrap:wrap;">'+(isPermit?'<button class="btn blue sm" id="dm-print">🖨️ Print permit (A4)</button>':'')+(v.status==='on_site'?'<button class="btn red sm" id="dm-out">Sign out</button>':'')+'<button class="btn sm" id="dm-close">Close</button></div>';
   showModal(html, function(root){
     var o=root.querySelector('#dm-out'); if(o) o.addEventListener('click',function(){ signOut(v.id); closeModal(); });
+    var pr=root.querySelector('#dm-print'); if(pr) pr.addEventListener('click',function(){ printPermit(v); });
     root.querySelector('#dm-close').addEventListener('click',closeModal);
   });
+}
+/* ---- A4 printable Permit to Work ---- */
+function printPermit(v){
+  var d=v.details||{}; var t=d.work_permit_type||'General Work';
+  var all=(CHECKLISTS[t]||[]).concat(COMMON_CONTROLS);
+  var ticked=(d.controls||d.precautions||[]);
+  var rows=all.map(function(c){ var on=ticked.indexOf(c)>=0; return '<tr><td class="ck">'+(on?'☑':'☐')+'</td><td>'+esc(c)+'</td></tr>'; }).join('');
+  function fld(l,val){ return '<div class="fld"><span class="l">'+l+'</span><span class="v">'+esc(val||'—')+'</span></div>'; }
+  var logo=JT_LOGO?('<img src="'+JT_LOGO+'" style="width:54px;height:54px;border-radius:8px;object-fit:cover;">'):'';
+  var html='<!DOCTYPE html><html><head><meta charset="utf-8"><title>Permit to Work '+esc(d.permit_no||'')+'</title><style>'+
+    '@page{size:A4;margin:14mm;} *{box-sizing:border-box;} body{font-family:Arial,Helvetica,sans-serif;color:#111;font-size:12px;margin:0;}'+
+    '.hd{display:flex;align-items:center;gap:12px;border-bottom:3px solid #c8901f;padding-bottom:10px;margin-bottom:12px;}'+
+    '.hd .t{flex:1;} .hd h1{font-size:20px;margin:0;} .hd .co{font-weight:700;font-size:14px;} .hd .no{text-align:right;font-size:12px;}'+
+    '.grid{display:grid;grid-template-columns:1fr 1fr;gap:6px 18px;margin:10px 0;}'+
+    '.fld{display:flex;gap:8px;border-bottom:1px solid #ddd;padding:5px 0;} .fld .l{font-weight:700;min-width:120px;color:#444;} .fld .v{flex:1;}'+
+    '.sec{margin-top:14px;font-weight:700;font-size:13px;text-transform:uppercase;letter-spacing:.03em;color:#c8901f;border-bottom:1px solid #eee;padding-bottom:4px;}'+
+    'table{width:100%;border-collapse:collapse;margin-top:8px;} td{border:1px solid #ccc;padding:6px 8px;vertical-align:top;} td.ck{width:26px;text-align:center;font-size:15px;}'+
+    '.decl{margin-top:14px;border:1px solid #ccc;border-radius:6px;padding:10px;font-size:11.5px;} .sign{display:grid;grid-template-columns:1fr 1fr;gap:24px;margin-top:26px;} .sign .s{border-top:1px solid #333;padding-top:4px;font-size:11px;color:#444;}'+
+    '.ft{margin-top:16px;text-align:center;color:#888;font-size:10px;}'+
+    '</style></head><body>'+
+    '<div class="hd">'+logo+'<div class="t"><div class="co">'+esc(company.name||'')+'</div><h1>PERMIT TO WORK</h1></div><div class="no"><b>'+esc(d.permit_no||'')+'</b><br>'+esc(t)+'</div></div>'+
+    '<div class="grid">'+fld('Contractor',v.visitor_company)+fld('Representative',v.visitor_name)+fld('Contact',v.phone)+fld('Site supervisor',d.supervisor)+fld('Location / area',d.location)+fld('No. of persons',d.persons)+fld('Valid from',d.valid_from)+fld('Valid to',d.valid_to)+'</div>'+
+    '<div class="sec">Description of work</div><div style="border:1px solid #ccc;border-radius:6px;padding:8px;min-height:44px;">'+esc(d.work_desc||'')+'</div>'+
+    '<div class="sec">Hazard controls &amp; precautions checklist</div><table><tbody>'+rows+'</tbody></table>'+
+    '<div class="decl"><b>Contractor declaration:</b> I confirm the controls above are in place, my team is briefed and competent, and the work will be carried out in accordance with the method statement and site rules. Work will stop if conditions change.</div>'+
+    '<div class="sign"><div class="s">Contractor signature &amp; date</div><div class="s">Issued / authorised by (site) &amp; date</div></div>'+
+    '<div class="ft">Generated by '+esc(company.name||'')+' · Visitor &amp; Contractor Management · JT.3rDegre3 · '+new Date().toLocaleString('en-IE')+'</div>'+
+    '</body></html>';
+  var w=window.open('','_blank'); if(!w){ toast('Allow pop-ups to print.'); return; } w.document.write(html); w.document.close(); w.focus(); setTimeout(function(){ w.print(); },350);
 }
 /* generic modal using accountBg container */
 var _modalPrev=null;
@@ -722,20 +755,29 @@ function kioskSignIn(){
     '<div style="display:flex;gap:10px;margin-top:16px;"><button class="btn full" id="k-cancel">Cancel</button><button class="btn green full" id="k-submit">Submit Time In</button></div><div id="k-msg" class="err"></div>';
   document.getElementById('k-back').addEventListener('click',kioskHome);
   document.getElementById('k-cancel').addEventListener('click',kioskHome);
-  document.getElementById('k-purpose').addEventListener('change',renderMaint);
+  document.getElementById('k-purpose').addEventListener('change',renderPermit);
   document.getElementById('k-submit').addEventListener('click',kioskSubmit);
 }
-function renderMaint(){
+function renderPermit(){
   var box=document.getElementById('k-maint'); var p=document.getElementById('k-purpose').value;
-  if(p!=='Maintenance/Repair'){ box.innerHTML=''; return; }
-  box.innerHTML='<div class="permit-box"><div class="h">🛠️ Work permit details</div>'+
-    '<label>Type of work</label><select id="k-wtype">'+MAINT_TYPES.map(function(t){return '<option>'+t+'</option>';}).join('')+'</select>'+
-    '<label>Description of work</label><input id="k-wdesc" placeholder="e.g. replace roof light fitting">'+
-    '<label>Location / area</label><input id="k-wloc" placeholder="e.g. Warehouse bay 3">'+
-    '<label>Precautions in place</label><div class="checks" id="k-wprec"></div></div>';
-  fillPrec(); document.getElementById('k-wtype').addEventListener('change',fillPrec);
+  document.getElementById('k-submit').textContent = (p==='Contractor')?'Submit permit & Time In':'Submit Time In';
+  if(p!=='Contractor'){ box.innerHTML=''; return; }
+  box.innerHTML='<div class="permit-box"><div class="h">🛠️ Contractor Permit to Work</div>'+
+    '<div class="muted" style="font-size:12.5px;margin-bottom:4px;">Required for all contractor work — keeps you and the site safe.</div>'+
+    '<label>Type of permit *</label><select id="k-wtype">'+PERMIT_TYPES.map(function(t){return '<option>'+t+'</option>';}).join('')+'</select>'+
+    '<label>Description of work *</label><input id="k-wdesc" placeholder="e.g. replace conveyor bearing">'+
+    '<label>Exact location / area *</label><input id="k-wloc" placeholder="e.g. Primary crusher, Quarry face 2">'+
+    '<div class="grid2"><div><label>Valid from</label><input type="datetime-local" id="k-wfrom"></div><div><label>Valid to</label><input type="datetime-local" id="k-wto"></div></div>'+
+    '<div class="grid2"><div><label>No. of persons</label><input type="number" id="k-wpers" min="1" value="1"></div><div><label>Site supervisor</label><input id="k-wsup" placeholder="Name"></div></div>'+
+    '<label>Controls &amp; precautions in place *</label><div class="checks" id="k-wprec"></div>'+
+    '<label class="ack"><input type="checkbox" id="k-wdeclare"> I confirm the above controls are in place and the work will follow the method statement / site rules.</label>'+
+    '</div>';
+  fillControls(); document.getElementById('k-wtype').addEventListener('change',fillControls);
 }
-function fillPrec(){ var t=document.getElementById('k-wtype').value; var list=PRECAUTIONS[t]||PRECAUTIONS['General Work']; document.getElementById('k-wprec').innerHTML=list.map(function(p,i){return '<label><input type="checkbox" class="kprec" value="'+esc(p)+'"> '+esc(p)+'</label>';}).join(''); }
+function fillControls(){
+  var t=document.getElementById('k-wtype').value; var list=(CHECKLISTS[t]||[]).concat(COMMON_CONTROLS);
+  document.getElementById('k-wprec').innerHTML=list.map(function(p){return '<label><input type="checkbox" class="kprec" value="'+esc(p)+'"> '+esc(p)+'</label>';}).join('');
+}
 async function kioskSubmit(){
   var msg=document.getElementById('k-msg'); msg.textContent='';
   var name=document.getElementById('k-name').value.trim(); if(!name){ msg.textContent='Please enter your full name.'; return; }
@@ -744,7 +786,17 @@ async function kioskSubmit(){
   var ackEl=document.getElementById('k-ack'); if(ackEl && !ackEl.checked){ msg.textContent='Please confirm you read the site rules.'; return; }
   var purpose=document.getElementById('k-purpose').value||'';
   var details=null;
-  if(purpose==='Maintenance/Repair'){ var prec=[]; document.querySelectorAll('.kprec:checked').forEach(function(c){prec.push(c.value);}); details={ work_permit_type:(document.getElementById('k-wtype')||{}).value||'General Work', work_desc:(document.getElementById('k-wdesc')||{}).value||'', location:(document.getElementById('k-wloc')||{}).value||'', precautions:prec }; }
+  if(purpose==='Contractor'){
+    var desc=(document.getElementById('k-wdesc')||{}).value||'', loc=(document.getElementById('k-wloc')||{}).value||'';
+    if(!desc.trim()){ msg.textContent='Describe the contractor work.'; return; }
+    if(!loc.trim()){ msg.textContent='Enter the work location.'; return; }
+    if(!document.getElementById('k-wdeclare').checked){ msg.textContent='Please confirm the controls are in place.'; return; }
+    var prec=[]; document.querySelectorAll('.kprec:checked').forEach(function(c){prec.push(c.value);});
+    details={ permit:true, work_permit_type:(document.getElementById('k-wtype')||{}).value||'General Work', work_desc:desc, location:loc,
+      valid_from:(document.getElementById('k-wfrom')||{}).value||'', valid_to:(document.getElementById('k-wto')||{}).value||'',
+      persons:(document.getElementById('k-wpers')||{}).value||'', supervisor:(document.getElementById('k-wsup')||{}).value||'',
+      controls:prec, declared:true, permit_no:'PTW-'+genCode(6) };
+  }
   var b=document.getElementById('k-submit'); b.disabled=true; b.textContent='Submitting…';
   var name2=name, comp=document.getElementById('k-company').value.trim(), host=document.getElementById('k-host').value.trim(), phone=document.getElementById('k-phone').value.trim(), veh=(document.getElementById('k-veh')||{}).value||'';
   var okDone=false;
@@ -758,9 +810,9 @@ async function kioskSubmit(){
       if(okDone){ await loadVisits(); renderAll(); }
     }
   }catch(_){}
-  b.disabled=false; b.textContent='Submit Time In';
+  b.disabled=false; b.textContent=(purpose==='Contractor')?'Submit permit & Time In':'Submit Time In';
   if(!okDone){ msg.textContent='Could not sign in. Please tell reception.'; return; }
-  kioskDone('You are signed in','Welcome, '+esc(name2)+'. Enjoy your visit.');
+  kioskDone('You are signed in', purpose==='Contractor' ? ('Permit logged. Welcome, '+esc(name2)+'. Please report to your site contact.') : ('Welcome, '+esc(name2)+'. Enjoy your visit.'));
 }
 async function kioskSignOutList(){
   var list=[];
