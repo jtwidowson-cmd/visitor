@@ -247,6 +247,14 @@ window.__sbLoad = (window.supabase) ? Promise.resolve(true) : new Promise(functi
   .folder-tabs .ft{padding:8px 14px;border:1px solid var(--line);border-radius:999px;cursor:pointer;font-size:13.5px;font-weight:600;background:var(--panel);}
   .folder-tabs .ft.active{background:var(--amber);border-color:var(--amber);color:#231701;}
   .dtsplit{display:grid;grid-template-columns:1fr 130px;gap:10px;}
+  /* dashboard photo float (marquee, like TFMS) */
+  .dash-photoflow{margin-bottom:18px;overflow:hidden;position:relative;-webkit-mask-image:linear-gradient(90deg,transparent,#000 6%,#000 94%,transparent);mask-image:linear-gradient(90deg,transparent,#000 6%,#000 94%,transparent);}
+  .dpf-track{display:flex;gap:16px;width:max-content;animation:dpfScroll 40s linear infinite;animation-direction:reverse;}
+  .dash-photoflow:hover .dpf-track{animation-play-state:paused;}
+  @keyframes dpfScroll{from{transform:translateX(0)}to{transform:translateX(-50%)}}
+  .dpf-item{width:190px;height:126px;border-radius:16px;overflow:hidden;flex:none;border:1px solid var(--line);box-shadow:0 10px 24px -12px rgba(0,0,0,.45);}
+  .dpf-item img{width:100%;height:100%;object-fit:cover;display:block;}
+  @media print{.dash-photoflow{display:none!important;}}
   @media(max-width:560px){ .permit-q{grid-template-columns:1fr;} .dtsplit{grid-template-columns:1fr 1fr;} }
 @media print{ .sidebar,.topbar,.icon-btn,#jtThemeBtn,.no-print{display:none !important;} .content{max-width:none;padding:0;} body{background:#fff;} }
 </style>
@@ -325,7 +333,6 @@ window.__sbLoad = (window.supabase) ? Promise.resolve(true) : new Promise(functi
     <div class="navsec">Menu</div>
     <div class="navi active" data-view="dashboard"><span class="ic">📊</span> Dashboard</div>
     <div class="navi" data-view="visitors"><span class="ic">📖</span> Visitor Logs</div>
-    <div class="navi" data-view="permits"><span class="ic">📝</span> Work Permits</div>
     <div class="navi" data-view="kiosk-open"><span class="ic">🖥️</span> Open Kiosk</div>
     <div class="navi" data-view="company"><span class="ic">🏢</span> Company Setup</div>
     <div class="side-foot">
@@ -623,7 +630,7 @@ async function loadVisits(){ try{ var r=await sb.from('visits').select('*').orde
 /* ---------------- coverage + analytics ---------------- */
 function coverageStart(){ var c=document.getElementById('cov').value; var n=new Date(); if(c==='today'){ return new Date(n.getFullYear(),n.getMonth(),n.getDate()).getTime(); } if(c==='week'){ return Date.now()-6*864e5; } if(c==='month'){ return new Date(n.getFullYear(),n.getMonth(),1).getTime(); } return 0; }
 function coveredVisits(){ var start=coverageStart(); return visits.filter(function(v){ var t=new Date(v.signed_in_at||v.created_at).getTime(); return t>=start; }); }
-function renderAll(){ renderDashboard(); renderLog(); renderPermits(); renderSites(); renderSettingsForm(); renderCompany(); renderWidgets(); renderQR(); }
+function renderAll(){ renderDashboard(); renderLog(); renderSites(); renderSettingsForm(); renderCompany(); renderWidgets(); renderQR(); }
 
 /* ================= VISITOR TYPE FOLDERS + 7PM ARCHIVE ================= */
 function ymd(d){ d=d||new Date(); return d.getFullYear()+'-'+String(d.getMonth()+1).padStart(2,'0')+'-'+String(d.getDate()).padStart(2,'0'); }
@@ -653,11 +660,11 @@ function renderWidgets(){
   var photos=(company.photos||[]);
   if(mgr){ mgr.innerHTML=photos.length?photos.map(function(p,i){ return '<div style="position:relative;"><img src="'+p+'" style="width:120px;height:80px;object-fit:cover;border-radius:8px;border:1px solid var(--line);"><button class="btn sm red" data-wgdel="'+i+'" style="position:absolute;top:4px;right:4px;padding:2px 7px;">✕</button></div>'; }).join(''):'<div class="muted" style="font-size:12.5px;">No photos yet.</div>';
     mgr.querySelectorAll('[data-wgdel]').forEach(function(b){ b.addEventListener('click',async function(){ var i=+b.getAttribute('data-wgdel'); photos.splice(i,1); await saveWidgets(photos); }); }); }
-  // dashboard strip
+  // dashboard photo float (marquee)
   var dash=document.getElementById('v-dashboard');
-  if(dash){ var strip=document.getElementById('dashWidgets'); if(!strip){ strip=document.createElement('div'); strip.id='dashWidgets'; strip.style.cssText='display:flex;gap:12px;flex-wrap:wrap;margin-bottom:16px;'; dash.insertBefore(strip, dash.firstChild); }
-    strip.innerHTML=photos.map(function(p){ return '<img src="'+p+'" style="width:150px;height:96px;object-fit:cover;border-radius:12px;border:1px solid var(--line);box-shadow:var(--shadow);">'; }).join('');
-    strip.style.display=photos.length?'flex':'none'; }
+  if(dash){ var strip=document.getElementById('dashWidgets'); if(!strip){ strip=document.createElement('div'); strip.id='dashWidgets'; strip.className='dash-photoflow'; dash.insertBefore(strip, dash.firstChild); }
+    if(photos.length){ var items=photos.concat(photos).map(function(p){ return '<div class="dpf-item"><img src="'+p+'" alt=""></div>'; }).join(''); strip.innerHTML='<div class="dpf-track" id="dpfTrack">'+items+'</div>'; strip.style.display=''; var tr=document.getElementById('dpfTrack'); if(tr) tr.style.animationDuration=Math.max(18,photos.length*10)+'s'; }
+    else { strip.innerHTML=''; strip.style.display='none'; } }
 }
 async function saveWidgets(photos){
   company.photos=photos;
@@ -852,25 +859,46 @@ async function signOut(id){ var r=await sb.from('visits').update({status:'signed
 
 function openDetail(id){
   var v=null; for(var i=0;i<visits.length;i++){ if(visits[i].id===id){v=visits[i];break;} } if(!v) return;
-  var d=v.details||{}; var permit=''; var isPermit=!!(d && (d.permit || d.work_permit_type));
-  if(isPermit){ permit='<div class="permit-box" style="margin-top:12px;"><div class="h">📋 Permit to Work — '+esc(d.work_permit_type||'')+'</div>'+
-    (d.permit_no?'<div style="font-size:13px;"><b>Permit no:</b> '+esc(d.permit_no)+'</div>':'')+
-    (d.work_desc?'<div style="font-size:13px;"><b>Work:</b> '+esc(d.work_desc)+'</div>':'')+
-    (d.location?'<div style="font-size:13px;"><b>Location:</b> '+esc(d.location)+'</div>':'')+
-    ((d.valid_from||d.valid_to)?'<div style="font-size:13px;"><b>Valid:</b> '+esc(d.valid_from||'—')+' → '+esc(d.valid_to||'—')+'</div>':'')+
-    (d.supervisor?'<div style="font-size:13px;"><b>Supervisor:</b> '+esc(d.supervisor)+(d.persons?' · '+esc(d.persons)+' person(s)':'')+'</div>':'')+
-    (((d.controls||d.precautions)||[]).length?'<div style="font-size:13px;margin-top:4px;"><b>Controls:</b> '+((d.controls||d.precautions)).map(esc).join(', ')+'</div>':'')+'</div>'; }
+  var fp=(permits||[]).filter(function(x){return x.visit_id===v.id;})[0]||null;
+  var canDecide=(userRole==='officer'||userRole==='admin');
+  var permit='';
+  if(fp){
+    var ans=fp.answers||{}; var ansHtml=Object.keys(ans).map(function(k){ return '<div class="permit-q"><div>'+esc(k)+'</div><div style="text-align:right;font-weight:700;">'+esc(ans[k]||'—')+'</div></div>'; }).join('');
+    permit='<div class="permit-box" style="margin-top:12px;"><div class="h">📋 Work Permit — '+esc(fp.permit_type||'')+' <span class="pill '+esc(fp.status)+'">'+esc(fp.status)+'</span></div>'+
+      (fp.ref?'<div style="font-size:12px;color:var(--paper-dim);">'+esc(fp.ref)+'</div>':'')+
+      '<div style="font-size:13px;margin-top:4px;"><b>Applicant:</b> '+esc(fp.applicant_name||'')+' ('+esc(fp.applicant_email||'')+')</div>'+
+      (fp.work_description?'<div style="font-size:13px;"><b>Work:</b> '+esc(fp.work_description)+'</div>':'')+
+      (fp.site?'<div style="font-size:13px;"><b>Location:</b> '+esc(fp.site)+'</div>':'')+
+      '<div style="font-size:13px;"><b>Valid:</b> '+esc((fp.valid_from_date||'')+' '+(fp.valid_from_time||''))+' → '+esc((fp.valid_to_date||'')+' '+(fp.valid_to_time||''))+'</div>'+
+      '<div style="font-size:13px;"><b>Induction complete:</b> '+(fp.induction_done?'Yes':'No')+' · <b>Beacon:</b> '+(fp.beacon_light?'Yes':'No (hazard marshal)')+'</div>'+
+      (ansHtml?'<div style="margin-top:6px;">'+ansHtml+'</div>':'')+
+      '<div class="declbox" style="margin-top:8px;font-size:12.5px;">✔ Truthfulness declaration accepted — signed: <b>'+esc(fp.signature||'')+'</b></div>'+
+      (fp.decision_note?'<div class="muted" style="font-size:12.5px;">Note: '+esc(fp.decision_note)+'</div>':'')+'</div>';
+  }
+  var actions='';
+  if(fp && canDecide && fp.status==='submitted'){ actions+='<button class="btn red sm" id="dm-reject">Reject permit</button><button class="btn green sm" id="dm-approve">Approve permit</button>'; }
+  else if(fp && canDecide && fp.status==='approved'){ actions+='<button class="btn sm" id="dm-closep">Close out permit</button>'; }
   var html='<h3 style="margin-top:0;">'+esc(v.visitor_name)+'</h3><div class="muted" style="font-size:13px;margin-bottom:8px;">'+esc(v.visitor_company||'')+(v.host?' · visiting '+esc(v.host):'')+'</div>'+
     '<div class="grid2" style="font-size:13.5px;"><div><b>Purpose</b><br>'+esc(v.purpose||'—')+'</div><div><b>Status</b><br>'+statusPill(v)+'</div>'+
     '<div><b>Vehicle</b><br>'+esc(v.vehicle_reg||'—')+'</div><div><b>Contact</b><br>'+esc(v.phone||'—')+'</div>'+
     '<div><b>Time in</b><br>'+fmtDT(v.signed_in_at)+'</div><div><b>Time out</b><br>'+(v.signed_out_at?fmtDT(v.signed_out_at):'—')+'</div>'+
     '<div><b>Duration</b><br>'+dur(v.signed_in_at,v.signed_out_at)+'</div></div>'+permit+
-    '<div style="display:flex;gap:8px;margin-top:16px;justify-content:flex-end;flex-wrap:wrap;">'+(isPermit?'<button class="btn blue sm" id="dm-print">🖨️ Print permit (A4)</button>':'')+(v.status==='on_site'?'<button class="btn red sm" id="dm-out">Sign out</button>':'')+'<button class="btn sm" id="dm-close">Close</button></div>';
+    '<div style="display:flex;gap:8px;margin-top:16px;justify-content:flex-end;flex-wrap:wrap;">'+actions+(v.status==='on_site'?'<button class="btn red sm" id="dm-out">Sign out</button>':'')+'<button class="btn sm" id="dm-close">Close</button></div>';
   showModal(html, function(root){
-    var o=root.querySelector('#dm-out'); if(o) o.addEventListener('click',function(){ signOut(v.id); closeModal(); });
-    var pr=root.querySelector('#dm-print'); if(pr) pr.addEventListener('click',function(){ printPermit(v); });
+    var oo=root.querySelector('#dm-out'); if(oo) oo.addEventListener('click',function(){ signOut(v.id); closeModal(); });
+    var ap=root.querySelector('#dm-approve'); if(ap) ap.addEventListener('click',function(){ decidePermitDetail(fp,'approved'); });
+    var rj=root.querySelector('#dm-reject'); if(rj) rj.addEventListener('click',function(){ decidePermitDetail(fp,'rejected'); });
+    var cp=root.querySelector('#dm-closep'); if(cp) cp.addEventListener('click',function(){ decidePermitDetail(fp,'closed'); });
     root.querySelector('#dm-close').addEventListener('click',closeModal);
   });
+}
+async function decidePermitDetail(p,status){
+  if(!p) return;
+  var note=''; if(status==='rejected'){ note=prompt('Reason for rejection (optional):')||''; }
+  var r=await sb.from('contractor_permits').update({status:status,decision_note:note,decided_by:myId,decided_at:new Date().toISOString()}).eq('id',p.id);
+  if(r.error){ toast('Officers/admins only.'); return; }
+  try{ await sb.functions.invoke('permit-notify',{body:{permit_id:p.id,event:status}}); }catch(_){}
+  closeModal(); await loadPermits(); await loadVisits(); renderAll(); toast('Permit '+status+'.');
 }
 /* ---- A4 printable Permit to Work ---- */
 function printPermit(v){
@@ -1066,21 +1094,29 @@ function renderPermit(){
   var box=document.getElementById('k-maint'); var p=document.getElementById('k-purpose').value;
   document.getElementById('k-submit').textContent = (p==='Contractor')?'Submit permit & Time In':'Submit Time In';
   if(p!=='Contractor'){ box.innerHTML=''; return; }
-  box.innerHTML='<div class="permit-box"><div class="h">🛠️ Contractor Permit to Work</div>'+
-    '<div class="muted" style="font-size:12.5px;margin-bottom:4px;">Required for all contractor work — keeps you and the site safe.</div>'+
-    '<label>Type of permit *</label><select id="k-wtype">'+PERMIT_TYPES.map(function(t){return '<option>'+t+'</option>';}).join('')+'</select>'+
+  box.innerHTML='<div class="permit-box"><div class="h">🛠️ Contractor Work Permit</div>'+
+    '<div class="muted" style="font-size:12.5px;margin-bottom:6px;">Required for all contractor work — for your safety and the site\'s.</div>'+
+    '<label>Applicant email *</label><input id="k-wemail" type="email" placeholder="you@company.com">'+
+    '<label>Type of work permit *</label><select id="k-wtype">'+WP_TYPES.map(function(t){return '<option>'+esc(t)+'</option>';}).join('')+'</select>'+
     '<label>Description of work *</label><input id="k-wdesc" placeholder="e.g. replace conveyor bearing">'+
     '<label>Exact location / area *</label><input id="k-wloc" placeholder="e.g. Primary crusher, Quarry face 2">'+
-    '<div class="grid2"><div><label>Valid from</label><input type="datetime-local" id="k-wfrom"></div><div><label>Valid to</label><input type="datetime-local" id="k-wto"></div></div>'+
-    '<div class="grid2"><div><label>No. of persons</label><input type="number" id="k-wpers" min="1" value="1"></div><div><label>Site supervisor</label><input id="k-wsup" placeholder="Name"></div></div>'+
-    '<label>Controls &amp; precautions in place *</label><div class="checks" id="k-wprec"></div>'+
-    '<label class="ack"><input type="checkbox" id="k-wdeclare"> I confirm the above controls are in place and the work will follow the method statement / site rules.</label>'+
+    '<div class="grid2"><div><label>Valid FROM</label><div class="dtsplit"><input type="date" id="k-wfromd"><input type="time" id="k-wfromt"></div></div>'+
+    '<div><label>Valid TO</label><div class="dtsplit"><input type="date" id="k-wtod"><input type="time" id="k-wtot"></div></div></div>'+
+    '<div class="grid2"><div><label>No. of workers</label><input type="number" id="k-wpers" min="1" value="1"></div><div><label>Site supervisor</label><input id="k-wsup" placeholder="Name"></div></div>'+
+    '<label style="margin-top:8px;">Has EVERYONE who will work completed the safety induction? *</label>'+wpYesNoNa('k-wind')+'<div id="k-wind-warn"></div>'+
+    '<label style="margin-top:8px;">Is a beacon light present at the area / plant? *</label>'+wpYesNoNa('k-wbeacon')+'<div id="k-wbeacon-warn"></div>'+
+    '<div class="sec-h" style="margin-top:12px;">Permit checklist</div><div id="k-wprec"></div>'+
+    '<div class="declbox"><label class="ack" style="align-items:flex-start;"><input type="checkbox" id="k-wdeclare"> <span>I confirm that all information in this permit is <b>honest and true</b>. I understand that the company accepts <b>no liability</b> if the information provided is false or inaccurate.</span></label></div>'+
+    '<label>Signature (type your full name) *</label><input id="k-wsign" placeholder="Full name">'+
     '</div>';
-  fillControls(); document.getElementById('k-wtype').addEventListener('change',fillControls);
+  fillControls();
+  document.getElementById('k-wtype').addEventListener('change',fillControls);
+  document.getElementById('k-wind').addEventListener('change',function(){ document.getElementById('k-wind-warn').innerHTML=(this.value==='No')?('<div class="warnbox">⚠ Everyone must complete the <b>safety induction</b> before this permit can be approved. <a href="'+MSFORM_INDUCTION+'" target="_blank" rel="noopener" style="color:var(--blue);text-decoration:underline;">Open the induction form →</a></div>'):''; });
+  document.getElementById('k-wbeacon').addEventListener('change',function(){ document.getElementById('k-wbeacon-warn').innerHTML=(this.value==='No')?('<div class="warnbox">No beacon light — a <b>full-time hazard marshal</b> is required until sign-out / time-out. <label class="ack" style="margin-top:6px;"><input type="checkbox" id="k-whazard"> I confirm a full-time hazard marshal will be provided.</label></div>'):''; });
 }
 function fillControls(){
-  var t=document.getElementById('k-wtype').value; var list=(CHECKLISTS[t]||[]).concat(COMMON_CONTROLS);
-  document.getElementById('k-wprec').innerHTML=list.map(function(p){return '<label><input type="checkbox" class="kprec" value="'+esc(p)+'"> '+esc(p)+'</label>';}).join('');
+  var t=document.getElementById('k-wtype').value; var qs=(WP_QUESTIONS[t]||[]).concat(WP_COMMON);
+  document.getElementById('k-wprec').innerHTML=qs.map(function(q,i){ return '<div class="permit-q"><div>'+esc(q)+'</div>'+wpYesNoNa('k-wq'+i)+'</div>'; }).join('');
 }
 async function kioskSubmit(){
   var msg=document.getElementById('k-msg'); msg.textContent='';
@@ -1089,29 +1125,44 @@ async function kioskSubmit(){
   if(info.require_vehicle){ var vv=document.getElementById('k-veh'); if(vv&&!vv.value.trim()){ msg.textContent='Vehicle plate is required.'; return; } }
   var ackEl=document.getElementById('k-ack'); if(ackEl && !ackEl.checked){ msg.textContent='Please confirm you read the site rules.'; return; }
   var purpose=document.getElementById('k-purpose').value||'';
-  var details=null;
+  var details=null, permitPayload=null;
   if(purpose==='Contractor'){
+    var wemail=(document.getElementById('k-wemail')||{}).value||'';
     var desc=(document.getElementById('k-wdesc')||{}).value||'', loc=(document.getElementById('k-wloc')||{}).value||'';
+    var wtype=(document.getElementById('k-wtype')||{}).value||WP_TYPES[0];
+    var wind=(document.getElementById('k-wind')||{}).value||'', wbeacon=(document.getElementById('k-wbeacon')||{}).value||'';
+    if(!/^[^@\s]+@[^@\s]+\.[^@\s]+$/.test(wemail)){ msg.textContent='Enter a valid applicant email.'; return; }
     if(!desc.trim()){ msg.textContent='Describe the contractor work.'; return; }
     if(!loc.trim()){ msg.textContent='Enter the work location.'; return; }
-    if(!document.getElementById('k-wdeclare').checked){ msg.textContent='Please confirm the controls are in place.'; return; }
-    var prec=[]; document.querySelectorAll('.kprec:checked').forEach(function(c){prec.push(c.value);});
-    details={ permit:true, work_permit_type:(document.getElementById('k-wtype')||{}).value||'General Work', work_desc:desc, location:loc,
-      valid_from:(document.getElementById('k-wfrom')||{}).value||'', valid_to:(document.getElementById('k-wto')||{}).value||'',
-      persons:(document.getElementById('k-wpers')||{}).value||'', supervisor:(document.getElementById('k-wsup')||{}).value||'',
-      controls:prec, declared:true, permit_no:'PTW-'+genCode(6) };
+    if(wind!=='Yes'){ msg.textContent='Everyone must complete the safety induction first.'; return; }
+    if(wbeacon===''){ msg.textContent='Answer the beacon light question.'; return; }
+    if(wbeacon==='No'){ var whz=document.getElementById('k-whazard'); if(!whz||!whz.checked){ msg.textContent='Confirm the full-time hazard marshal (no beacon light).'; return; } }
+    if(!document.getElementById('k-wdeclare').checked){ msg.textContent='Please accept the truthfulness declaration.'; return; }
+    var wsign=(document.getElementById('k-wsign')||{}).value||''; if(!wsign.trim()){ msg.textContent='Signature (full name) is required.'; return; }
+    var qlabels=(WP_QUESTIONS[wtype]||[]).concat(WP_COMMON); var wans={};
+    document.querySelectorAll('#k-wprec .permit-q select').forEach(function(sel,i){ wans[qlabels[i]||('q'+i)]=sel.value; });
+    permitPayload={ ref:'WP-'+ymd().replace(/-/g,'')+'-'+String(((permits||[]).length+1)).padStart(3,'0'), permit_type:wtype,
+      applicant_name:name, applicant_email:wemail, site:loc, work_description:desc,
+      num_workers:parseInt((document.getElementById('k-wpers')||{}).value,10)||null,
+      valid_from_date:(document.getElementById('k-wfromd')||{}).value||null, valid_from_time:(document.getElementById('k-wfromt')||{}).value||null,
+      valid_to_date:(document.getElementById('k-wtod')||{}).value||null, valid_to_time:(document.getElementById('k-wtot')||{}).value||null,
+      induction_done:true, beacon_light:(wbeacon==='Yes'), hazard_marshal:(wbeacon==='No'), answers:wans,
+      declaration_ack:true, signature:wsign, approver_email:company.approver||'', verifier_email:company.verifier||'' };
+    details={ permit:true, work_permit_type:wtype };
   }
   var b=document.getElementById('k-submit'); b.disabled=true; b.textContent='Submitting…';
   var name2=name, comp=document.getElementById('k-company').value.trim(), host=document.getElementById('k-host').value.trim(), phone=document.getElementById('k-phone').value.trim(), veh=(document.getElementById('k-veh')||{}).value||'';
   var okDone=false;
   try{
     if(KMODE==='public'){
-      var r=await sb.rpc('kiosk_sign_in',{p_token:KTOKEN,p_name:name2,p_company:comp,p_host:host,p_purpose:purpose,p_phone:phone,p_vehicle:veh,p_details:details});
-      okDone=(r.data===true);
+      var r=await sb.rpc('kiosk_sign_in_v2',{p_token:KTOKEN,p_name:name2,p_company:comp,p_host:host,p_purpose:purpose,p_phone:phone,p_vehicle:veh,p_visitor_type:mapVisitorType(purpose),p_details:details,p_permit:permitPayload});
+      okDone=!!(r.data && r.data.ok);
+      if(okDone && r.data.permit_id){ try{ await sb.functions.invoke('permit-notify',{body:{permit_id:r.data.permit_id,event:'submitted'}}); }catch(_){} }
     } else {
-      var ins=await sb.from('visits').insert({company_id:company.id,visitor_name:name2,visitor_company:comp,host:host,purpose:purpose,phone:phone,vehicle_reg:veh,details:details,visitor_type:mapVisitorType(purpose),induction_ack:true,status:'on_site',signed_in_at:new Date().toISOString(),created_by:myId});
-      okDone=!ins.error;
-      if(okDone){ await loadVisits(); renderAll(); }
+      var ins=await sb.from('visits').insert({company_id:company.id,visitor_name:name2,visitor_company:comp,host:host,purpose:purpose,phone:phone,vehicle_reg:veh,details:details,visitor_type:mapVisitorType(purpose),induction_ack:true,status:'on_site',signed_in_at:new Date().toISOString(),created_by:myId}).select('id').single();
+      okDone=!ins.error; var vid=ins.data?ins.data.id:null;
+      if(okDone && permitPayload && vid){ permitPayload.company_id=company.id; permitPayload.visit_id=vid; var pr=await sb.from('contractor_permits').insert(permitPayload).select('id').single(); if(!pr.error && pr.data){ try{ await sb.functions.invoke('permit-notify',{body:{permit_id:pr.data.id,event:'submitted'}}); }catch(_){} } }
+      if(okDone){ await loadVisits(); await loadPermits(); renderAll(); }
     }
   }catch(_){}
   b.disabled=false; b.textContent=(purpose==='Contractor')?'Submit permit & Time In':'Submit Time In';
