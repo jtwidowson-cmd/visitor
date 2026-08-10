@@ -66,6 +66,28 @@
 <title>Visitor &amp; Contractor Management</title>
 <link href="https://fonts.googleapis.com/css2?family=IBM+Plex+Sans:wght@400;500;600;700;800&family=IBM+Plex+Mono:wght@500;600&display=swap" rel="stylesheet">
 <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2"></script>
+<script>
+/* Resilient loader: if the primary CDN is slow or blocked (common on mobile / with ad-blockers),
+   fall back through other CDNs so sign-in still works. Boot waits on __sbLoad. */
+window.__sbLoad = (window.supabase) ? Promise.resolve(true) : new Promise(function(resolve){
+  var SRC=[
+    'https://unpkg.com/@supabase/supabase-js@2/dist/umd/supabase.js',
+    'https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2.45.4/dist/umd/supabase.js',
+    'https://esm.sh/@supabase/supabase-js@2?bundle&target=es2019'
+  ];
+  var i=0, done=false;
+  function finish(ok){ if(done) return; done=true; resolve(ok); }
+  (function next(){
+    if(window.supabase) return finish(true);
+    if(i>=SRC.length) return finish(false);
+    var url=SRC[i++]; var s=document.createElement('script'); s.async=false;
+    s.onload=function(){ window.supabase ? finish(true) : next(); };
+    s.onerror=function(){ next(); };
+    s.src=url; document.head.appendChild(s);
+  })();
+  setTimeout(function(){ finish(!!window.supabase); }, 12000);
+});
+</script>
 <script src="https://cdn.jsdelivr.net/npm/qrcode-generator@1.4.4/qrcode.js"></script>
 <style>
   :root{
@@ -412,7 +434,7 @@
 var SUPABASE_URL='https://xsfrgivexrwzvmhmysrf.supabase.co';
 var SUPABASE_ANON_KEY='sb_publishable_yYB5wciGbc7zJyc7oe1RYg_B9npEyqN';
 var APP_KEY='visitor';
-var sb=null; try{ sb=window.supabase.createClient(SUPABASE_URL, SUPABASE_ANON_KEY); }catch(e){ console.error(e); }
+var sb=null; function initSb(){ if(sb) return true; try{ if(window.supabase && window.supabase.createClient){ sb=window.supabase.createClient(SUPABASE_URL, SUPABASE_ANON_KEY); return true; } }catch(e){ console.error('Supabase init failed',e); } return false; } initSb();
 var userEmail='', userName='', userRole='', isOwner=false, myId=null;
 var company={id:null,name:'',invite:'',email:''};
 var settings={induction_text:'',emergency_text:'',require_induction:false,require_vehicle:false,kiosk_token:''};
@@ -850,7 +872,7 @@ function kioskDone(title,sub){ document.getElementById('kioskBody').innerHTML='<
 
 applyBrand('');
 goView('dashboard');
-boot();
+(window.__sbLoad||Promise.resolve(true)).then(function(){ initSb(); boot(); });
 </script>
 </body>
 </html>
