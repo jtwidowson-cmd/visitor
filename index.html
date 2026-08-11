@@ -1050,20 +1050,59 @@ document.getElementById('se-save').addEventListener('click', async function(){
   var r=await sb.from('visit_settings').upsert(patch,{onConflict:'company_id'}); if(r.error){ toast('Admins only.'); return; }
   settings.induction_text=patch.induction_text; settings.emergency_text=patch.emergency_text; settings.require_induction=patch.require_induction; settings.require_vehicle=patch.require_vehicle; settings.decl_truth=patch.decl_truth; settings.decl_gdpr=patch.decl_gdpr; settings.induction_video_url=patch.induction_video_url; settings.induction_questions=(patch.induction_questions&&patch.induction_questions.length?patch.induction_questions:null); toast('Settings saved.');
 });
+/* Auto-compress a big video (downscale + lower bitrate) so it uploads easily. Real-time re-encode. */
+function canCompressVideo(){ try{ return typeof MediaRecorder!=='undefined' && !!document.createElement('canvas').captureStream; }catch(_){ return false; } }
+function compressVideo(file, onProgress){
+  return new Promise(function(resolve,reject){
+    var url=URL.createObjectURL(file);
+    var v=document.createElement('video'); v.muted=true; v.playsInline=true; v.preload='auto'; v.src=url;
+    v.onerror=function(){ URL.revokeObjectURL(url); reject(new Error('read')); };
+    v.onloadedmetadata=function(){
+      var dur=v.duration||120;
+      var maxH=480; var scale=Math.min(1, maxH/(v.videoHeight||maxH));
+      var w=Math.max(2,Math.round((v.videoWidth||640)*scale/2)*2), h=Math.max(2,Math.round((v.videoHeight||480)*scale/2)*2);
+      var canvas=document.createElement('canvas'); canvas.width=w; canvas.height=h; var ctx=canvas.getContext('2d');
+      var cstream; try{ cstream=canvas.captureStream(24); }catch(e){ URL.revokeObjectURL(url); return reject(e); }
+      try{ var vs=v.captureStream?v.captureStream():(v.mozCaptureStream?v.mozCaptureStream():null); var at=vs&&vs.getAudioTracks?vs.getAudioTracks()[0]:null; if(at) cstream.addTrack(at); }catch(_){}
+      var mime = (MediaRecorder.isTypeSupported&&MediaRecorder.isTypeSupported('video/mp4')) ? 'video/mp4'
+               : (MediaRecorder.isTypeSupported&&MediaRecorder.isTypeSupported('video/webm;codecs=vp9,opus')) ? 'video/webm;codecs=vp9,opus'
+               : 'video/webm';
+      var targetBytes=42*1024*1024; var vbps=Math.max(400000, Math.min(1400000, Math.floor(targetBytes*8/dur)-128000));
+      var rec; try{ rec=new MediaRecorder(cstream,{mimeType:mime, videoBitsPerSecond:vbps, audioBitsPerSecond:96000}); }catch(e){ URL.revokeObjectURL(url); return reject(e); }
+      var chunks=[];
+      rec.ondataavailable=function(e){ if(e.data&&e.data.size) chunks.push(e.data); };
+      rec.onstop=function(){ URL.revokeObjectURL(url); resolve({blob:new Blob(chunks,{type:mime}), ext:(mime.indexOf('mp4')>=0?'mp4':'webm'), type:mime}); };
+      rec.onerror=function(e){ reject(e); };
+      function draw(){ if(v.paused||v.ended) return; try{ ctx.drawImage(v,0,0,w,h); }catch(_){}
+        if(onProgress&&dur) onProgress(Math.min(0.99, v.currentTime/dur)); requestAnimationFrame(draw); }
+      v.onended=function(){ setTimeout(function(){ try{ rec.stop(); }catch(_){} }, 200); };
+      v.onplay=function(){ try{ rec.start(1000); }catch(e){ reject(e); } draw(); };
+      v.play().catch(reject);
+    };
+  });
+}
 (function(){
   var up=document.getElementById('se-vid-upload'); var url=document.getElementById('se-vid-url');
   if(url) url.addEventListener('input', renderVidPreview);
   if(up) up.addEventListener('click', async function(){
     var f=document.getElementById('se-vid-file'); if(!f||!f.files||!f.files[0]){ toast('Choose a video file first.'); return; }
-    var file=f.files[0]; if(file.size>60*1024*1024){ toast('Please use a video under 60 MB (or paste a link).'); return; }
-    up.disabled=true; up.textContent='Uploading…';
+    var file=f.files[0];
+    up.disabled=true;
     try{
-      var path=(company.id||'co')+'/induction-'+genCode(6)+'.'+((file.name.split('.').pop()||'mp4'));
-      var r=await sb.storage.from('induction').upload(path, file, {upsert:true, contentType:file.type||'video/mp4'});
+      var blob=file, ext=(file.name.split('.').pop()||'mp4').toLowerCase(), ctype=file.type||'video/mp4';
+      if(file.size>15*1024*1024 && canCompressVideo()){
+        up.textContent='Compressing 0%…';
+        var res=await compressVideo(file, function(p){ up.textContent='Compressing '+Math.round(p*100)+'%… (about the video length)'; });
+        if(res && res.blob && res.blob.size>0 && res.blob.size<file.size){ blob=res.blob; ext=res.ext; ctype=res.type; }
+      }
+      if(blob.size>480*1024*1024){ toast('Video is still too large. Please use a shorter clip or paste a link.'); up.disabled=false; up.textContent='⬆️ Upload video'; return; }
+      up.textContent='Uploading…';
+      var path=(company.id||'co')+'/induction-'+genCode(6)+'.'+ext;
+      var r=await sb.storage.from('induction').upload(path, blob, {upsert:true, contentType:ctype});
       if(r.error){ toast(r.error.message||'Upload failed.'); }
-      else { var pub=sb.storage.from('induction').getPublicUrl(path); var u=(pub&&pub.data&&pub.data.publicUrl)||''; document.getElementById('se-vid-url').value=u; renderVidPreview(); toast('Video uploaded — press Save settings.'); }
-    }catch(e){ toast('Upload failed.'); }
-    up.disabled=false; up.textContent='Upload video';
+      else { var pub=sb.storage.from('induction').getPublicUrl(path); var u=(pub&&pub.data&&pub.data.publicUrl)||''; document.getElementById('se-vid-url').value=u; renderVidPreview(); toast('Video ready ('+Math.round(blob.size/1048576)+' MB) — press Save.'); }
+    }catch(e){ toast('Could not process the video — try a shorter clip or paste a link.'); }
+    up.disabled=false; up.textContent='⬆️ Upload video';
   });
 })();
 function kioskUrl(){ return location.origin+location.pathname+'?k='+encodeURIComponent(settings.kiosk_token||''); }
