@@ -850,7 +850,7 @@ async function submitPermit(){
   var btn=document.getElementById('wp-submit'); btn.disabled=true; btn.textContent='Submitting…';
   var r=await sb.from('contractor_permits').insert(row).select().single();
   if(r.error){ msg.textContent=r.error.message||'Could not submit.'; btn.disabled=false; btn.textContent='Submit permit'; return; }
-  try{ await sb.functions.invoke('permit-notify',{body:{permit_id:r.data.id,event:'submitted'}}); }catch(_){}
+  /* approval email sent automatically by DB trigger */
   document.getElementById('permitBg').classList.remove('open');
   await loadPermits(); renderPermits(); toast('Permit submitted — sent to the approver.');
 }
@@ -867,7 +867,7 @@ function openPermitView(id){
     row('Valid from',(p.valid_from_date||'')+' '+(p.valid_from_time||''))+row('Valid to',(p.valid_to_date||'')+' '+(p.valid_to_time||''))+
     row('Induction complete',p.induction_done?'Yes':'No')+row('Beacon light',p.beacon_light?'Yes':'No (hazard marshal)')+
     '<div class="sec-h" style="margin-top:12px;">Checklist</div>'+(ansHtml||'<div class="muted">—</div>')+
-    '<div class="declbox" style="margin-top:12px;">✔ Truthfulness declaration accepted — signed: <b>'+esc(p.signature||'')+'</b></div>'+
+    '<div class="declbox" style="margin-top:12px;overflow-wrap:anywhere;">✔ Truthfulness &amp; GDPR declarations accepted'+(p.signature?('<div style="margin-top:6px;"><b>Signature:</b><br><img src="'+esc(p.signature)+'" style="max-width:240px;max-height:100px;background:#fff;border:1px solid var(--line);border-radius:8px;padding:4px;"></div>'):'')+'</div>'+
     (p.decision_note?('<div class="muted" style="font-size:13px;">Note: '+esc(p.decision_note)+'</div>'):'');
   if(canDecide && p.status==='submitted'){
     html+='<label style="margin-top:10px;">Decision note (optional)</label><input id="pv-note">'+
@@ -887,7 +887,7 @@ async function decidePermit(p,status){
   var patch={ status:status, decision_note:note, decided_by:myId, decided_at:new Date().toISOString() };
   var r=await sb.from('contractor_permits').update(patch).eq('id',p.id);
   if(r.error){ toast('Officers/admins only.'); return; }
-  try{ await sb.functions.invoke('permit-notify',{body:{permit_id:p.id,event:status}}); }catch(_){}
+  /* decision email sent automatically by DB trigger */
   document.getElementById('permitViewBg').classList.remove('open');
   await loadPermits(); renderPermits(); toast('Permit '+status+'.');
 }
@@ -966,6 +966,19 @@ function startDurationTimer(){ setInterval(function(){ document.querySelectorAll
 
 async function signOut(id){ var r=await sb.from('visits').update({status:'signed_out',signed_out_at:new Date().toISOString()}).eq('id',id); if(r.error){ toast('Could not sign out.'); return; } await loadVisits(); renderAll(); toast('Signed out.'); }
 
+function declSigBlock(v, fp){
+  var dt=(v&&v.details)||{}; var sig=(v&&v.signature)||dt.signature||(fp&&fp.signature)||'';
+  var truthOK=dt.truth_ack||(fp&&fp.declaration_ack); var gdprOK=dt.gdpr_ack||(fp&&fp.declaration_ack);
+  if(!truthOK && !gdprOK && !sig) return '';
+  var tTxt=(settings.decl_truth||DECL_TRUTH_DEFAULT);
+  var gTxt=(settings.decl_gdpr||DECL_GDPR_DEFAULT).replace(/\{company\}/g, company.name||'the company');
+  var out='<div class="declbox" style="margin-top:10px;font-size:12.5px;line-height:1.5;overflow-wrap:anywhere;word-break:break-word;">';
+  out+='<div style="font-weight:700;margin-bottom:4px;">Declarations &amp; signature</div>';
+  out+='<div>'+(truthOK?'\u2713':'\u2014')+' <b>Truthfulness:</b> '+esc(tTxt)+'</div>';
+  out+='<div style="margin-top:4px;">'+(gdprOK?'\u2713':'\u2014')+' <b>Data protection (GDPR):</b> '+esc(gTxt)+'</div>';
+  if(sig){ out+='<div style="margin-top:8px;"><b>Signature:</b><br><img src="'+esc(sig)+'" alt="signature" style="max-width:240px;max-height:100px;background:#fff;border:1px solid var(--line);border-radius:8px;padding:4px;margin-top:4px;"></div>'; }
+  out+='</div>'; return out;
+}
 function openDetail(id){
   var v=null; for(var i=0;i<visits.length;i++){ if(visits[i].id===id){v=visits[i];break;} } if(!v) return;
   var fp=(permits||[]).filter(function(x){return x.visit_id===v.id;})[0]||null;
@@ -981,7 +994,7 @@ function openDetail(id){
       '<div style="font-size:13px;"><b>Valid:</b> '+esc((fp.valid_from_date||'')+' '+(fp.valid_from_time||''))+' → '+esc((fp.valid_to_date||'')+' '+(fp.valid_to_time||''))+'</div>'+
       '<div style="font-size:13px;"><b>Induction complete:</b> '+(fp.induction_done?'Yes':'No')+' · <b>Beacon:</b> '+(fp.beacon_light?'Yes':'No (hazard marshal)')+'</div>'+
       (ansHtml?'<div style="margin-top:6px;">'+ansHtml+'</div>':'')+
-      '<div class="declbox" style="margin-top:8px;font-size:12.5px;">✔ Truthfulness declaration accepted — signed: <b>'+esc(fp.signature||'')+'</b></div>'+
+      ''+
       (fp.decision_note?'<div class="muted" style="font-size:12.5px;">Note: '+esc(fp.decision_note)+'</div>':'')+'</div>';
   }
   var actions='';
@@ -991,7 +1004,7 @@ function openDetail(id){
     '<div class="grid2" style="font-size:13.5px;"><div><b>Purpose</b><br>'+esc(v.purpose||'—')+'</div><div><b>Status</b><br>'+statusPill(v)+'</div>'+
     '<div><b>Vehicle</b><br>'+esc(v.vehicle_reg||'—')+'</div><div><b>Contact</b><br>'+esc(v.phone||'—')+'</div>'+
     '<div><b>Time in</b><br>'+fmtDT(v.signed_in_at)+'</div><div><b>Time out</b><br>'+(v.signed_out_at?fmtDT(v.signed_out_at):'—')+'</div>'+
-    '<div><b>Duration</b><br>'+dur(v.signed_in_at,v.signed_out_at)+'</div></div>'+indDetail(v)+permit+
+    '<div><b>Duration</b><br>'+dur(v.signed_in_at,v.signed_out_at)+'</div></div>'+indDetail(v)+permit+declSigBlock(v,fp)+
     '<div style="display:flex;gap:8px;margin-top:16px;justify-content:flex-end;flex-wrap:wrap;">'+(isAdminRole()?'<button class="btn sm" id="dm-del" type="button" style="border-color:var(--red);color:var(--red);margin-right:auto;">\ud83d\uddd1 Delete log</button>':'')+actions+(v.status==='on_site'?'<button class="btn red sm" id="dm-out">Sign out</button>':'')+'<button class="btn sm" id="dm-close">Close</button></div>';
   showModal(html, function(root){
     var oo=root.querySelector('#dm-out'); if(oo) oo.addEventListener('click',function(){ signOut(v.id); closeModal(); });
@@ -1007,7 +1020,7 @@ async function decidePermitDetail(p,status){
   var note=''; if(status==='rejected'){ note=prompt('Reason for rejection (optional):')||''; }
   var r=await sb.from('contractor_permits').update({status:status,decision_note:note,decided_by:myId,decided_at:new Date().toISOString()}).eq('id',p.id);
   if(r.error){ toast('Officers/admins only.'); return; }
-  try{ await sb.functions.invoke('permit-notify',{body:{permit_id:p.id,event:status}}); }catch(_){}
+  /* decision email sent automatically by DB trigger */
   closeModal(); await loadPermits(); await loadVisits(); renderAll(); toast('Permit '+status+'.');
 }
 /* ---- A4 printable Permit to Work ---- */
@@ -1495,11 +1508,11 @@ async function kioskSubmit(){
     if(KMODE==='public'){
       var r=await sb.rpc('kiosk_sign_in_v2',{p_token:KTOKEN,p_name:name2,p_company:comp,p_host:host,p_purpose:purpose,p_phone:phone,p_vehicle:veh,p_visitor_type:mapVisitorType(purpose),p_details:details,p_permit:permitPayload});
       okDone=!!(r.data && r.data.ok);
-      if(okDone && r.data.permit_id){ try{ await sb.functions.invoke('permit-notify',{body:{permit_id:r.data.permit_id,event:'submitted'}}); }catch(_){} }
+      /* approval email sent automatically by DB trigger */
     } else {
       var ins=await sb.from('visits').insert({company_id:company.id,visitor_name:name2,visitor_company:comp,host:host,purpose:purpose,phone:phone,vehicle_reg:veh,details:details,visitor_type:mapVisitorType(purpose),induction_ack:inductionDone,signature:(_permitState.sig||null),status:'on_site',signed_in_at:new Date().toISOString(),created_by:myId}).select('id').single();
       okDone=!ins.error; var vid=ins.data?ins.data.id:null;
-      if(okDone && permitPayload && vid){ permitPayload.company_id=company.id; permitPayload.visit_id=vid; var pr=await sb.from('contractor_permits').insert(permitPayload).select('id').single(); if(!pr.error && pr.data){ try{ await sb.functions.invoke('permit-notify',{body:{permit_id:pr.data.id,event:'submitted'}}); }catch(_){} } }
+      if(okDone && permitPayload && vid){ permitPayload.company_id=company.id; permitPayload.visit_id=vid; await sb.from('contractor_permits').insert(permitPayload); /* approval email sent automatically by DB trigger */ }
       if(okDone){ await loadVisits(); await loadPermits(); renderAll(); }
     }
   }catch(_){}
