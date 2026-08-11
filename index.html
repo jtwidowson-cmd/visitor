@@ -272,7 +272,10 @@ window.__sbLoad = (window.supabase) ? Promise.resolve(true) : new Promise(functi
   .sig-clear{position:absolute;top:6px;right:8px;font-size:12px;}
   .opt-btn{display:flex;align-items:center;gap:8px;width:100%;text-align:left;padding:12px 14px;border:1px solid var(--line);border-radius:10px;background:var(--panel);margin-top:8px;cursor:pointer;font-weight:600;font-size:14px;color:var(--paper);}
   .opt-btn.on{border-color:var(--amber);background:var(--panel-2);}
-  .vid-wrap video{width:100%;border-radius:10px;background:#000;display:block;}
+  .vid-wrap{position:relative;} .vid-wrap video{width:100%;border-radius:10px;background:#000;display:block;}
+  #k-ytplayer{width:100%;aspect-ratio:16/9;border-radius:10px;overflow:hidden;background:#000;}
+  #k-ytplayer iframe{width:100%;height:100%;border:0;}
+  #k-yt-play{position:absolute;left:50%;top:50%;transform:translate(-50%,-50%);z-index:2;}
   .q-item{padding:10px 0;border-bottom:1px solid var(--line);font-size:14px;} .q-item:last-child{border-bottom:none;}
   .q-item .qopt{display:flex;align-items:center;gap:8px;margin-top:6px;font-weight:500;cursor:pointer;}
   .declbox2{background:var(--panel-2);border:1px solid var(--line);border-radius:10px;padding:12px 14px;font-size:13px;margin-top:10px;line-height:1.5;}
@@ -496,9 +499,9 @@ window.__sbLoad = (window.supabase) ? Promise.resolve(true) : new Promise(functi
           <div class="muted" style="font-size:11.5px;margin-top:4px;">Tip: use {company} to auto-insert your company name.</div>
           <hr style="border:none;border-top:1px solid var(--line);margin:16px 0;">
           <div class="sec-h">Safety induction video</div>
-          <div class="muted" style="font-size:12.5px;margin-bottom:8px;">Shown when a visitor answers that they have <b>not</b> completed the induction. Upload a video (MP4) or paste a direct link. Then press <b>Save</b>.</div>
+          <div class="muted" style="font-size:12.5px;margin-bottom:8px;">Shown when a visitor answers they have <b>not</b> completed the induction. <b>Easiest for long videos:</b> upload it to YouTube (unlisted) and paste the link below — any length, plays on every phone, seek bar is locked. Or upload a short MP4. Then press <b>Save</b>.</div>
           <div style="display:flex;gap:8px;align-items:center;flex-wrap:wrap;"><input type="file" id="se-vid-file" accept="video/*" style="flex:1;min-width:170px;"><button class="btn" id="se-vid-upload" type="button">⬆️ Upload video</button></div>
-          <label>Video link (MP4)</label><input id="se-vid-url" placeholder="https://…/induction.mp4">
+          <label>YouTube link (recommended) or MP4 link</label><input id="se-vid-url" placeholder="https://youtu.be/…  or  https://…/induction.mp4">
           <div id="se-vid-preview"></div>
           <hr style="border:none;border-top:1px solid var(--line);margin:16px 0;">
           <div class="sec-h">Induction video questions (5)</div>
@@ -1044,7 +1047,7 @@ function readIQEditor(){
   }
   return arr;
 }
-function renderVidPreview(){ var pv=document.getElementById('se-vid-preview'); if(!pv) return; var u=(document.getElementById('se-vid-url')||{}).value||settings.induction_video_url||''; pv.innerHTML=u?('<video src="'+esc(u)+'" controls style="width:100%;max-width:360px;border-radius:10px;margin-top:8px;background:#000;"></video>'):'<div class="muted" style="font-size:12.5px;margin-top:6px;">No induction video yet.</div>'; }
+function renderVidPreview(){ var pv=document.getElementById('se-vid-preview'); if(!pv) return; var u=(document.getElementById('se-vid-url')||{}).value||settings.induction_video_url||''; if(!u){ pv.innerHTML='<div class="muted" style="font-size:12.5px;margin-top:6px;">No induction video yet.</div>'; return; } if(ytId(u)){ pv.innerHTML='<div class="muted" style="font-size:12.5px;margin-top:8px;color:var(--green);">✓ YouTube video linked — plays at sign-in with the seek bar locked (any length, all phones).</div>'; } else { pv.innerHTML='<video src="'+esc(u)+'" controls style="width:100%;max-width:360px;border-radius:10px;margin-top:8px;background:#000;"></video>'; } }
 document.getElementById('se-save').addEventListener('click', async function(){
   var patch={ company_id:company.id, induction_text:document.getElementById('se-induction').value, emergency_text:document.getElementById('se-emergency').value, require_induction:document.getElementById('se-ind').checked, require_vehicle:document.getElementById('se-veh').checked, kiosk_token:settings.kiosk_token||null, decl_truth:document.getElementById('se-decl-truth').value, decl_gdpr:document.getElementById('se-decl-gdpr').value, induction_video_url:(document.getElementById('se-vid-url').value||'').trim(), induction_questions:readIQEditor(), updated_at:new Date().toISOString() };
   var r=await sb.from('visit_settings').upsert(patch,{onConflict:'company_id'}); if(r.error){ toast('Admins only.'); return; }
@@ -1299,10 +1302,22 @@ function renderIndFlow(){
   document.getElementById('k-ind-video').addEventListener('click',function(){ _permitState.mode='video'; _permitState.passed=false; markOpt('k-ind-video'); showInductionVideo(); });
 }
 function markOpt(id){ ['k-ind-office','k-ind-video'].forEach(function(x){ var e=document.getElementById(x); if(e) e.classList.toggle('on', x===id); }); }
+function ytId(u){ try{ var m=String(u||'').match(/(?:youtu\.be\/|youtube(?:-nocookie)?\.com\/(?:watch\?v=|embed\/|shorts\/|v\/))([\w-]{11})/); return m?m[1]:''; }catch(_){ return ''; } }
+var _ytQ=[], _ytLoading=false;
+function loadYtApi(cb){ if(window.YT&&window.YT.Player){ cb(); return; } _ytQ.push(cb); if(_ytLoading) return; _ytLoading=true; var prev=window.onYouTubeIframeAPIReady; window.onYouTubeIframeAPIReady=function(){ if(typeof prev==='function'){ try{prev();}catch(_){} } _ytQ.forEach(function(fn){ try{fn();}catch(_){} }); _ytQ=[]; }; var t=document.createElement('script'); t.src='https://www.youtube.com/iframe_api'; t.onerror=function(){ var p=document.getElementById('k-ind-panel'); if(p) p.innerHTML='<div class="warnbox">Could not load the video (no internet?). Please choose “Go to the safety office”.</div>'; }; document.head.appendChild(t); }
 function showInductionVideo(){
   var panel=document.getElementById('k-ind-panel'); var url=settings.induction_video_url||'';
   if(!url){ panel.innerHTML='<div class="warnbox">No induction video has been set up yet. Please choose “Go to the safety office”.</div>'; return; }
-  panel.innerHTML='<div class="vid-wrap"><video id="k-indvid" src="'+esc(url)+'" playsinline controlsList="nodownload noplaybackrate" controls></video></div><div class="muted" style="font-size:12px;margin-top:6px;">Please watch to the end — you cannot skip ahead. Questions appear when the video finishes.</div><div id="k-ind-quiz" style="margin-top:10px;"></div>';
+  var note='<div class="muted" style="font-size:12px;margin-top:6px;">Please watch to the end — you cannot skip ahead. Questions appear when the video finishes.</div><div id="k-ind-quiz" style="margin-top:10px;"></div>';
+  var yid=ytId(url);
+  if(yid){
+    panel.innerHTML='<div class="vid-wrap"><div id="k-ytplayer"></div><button type="button" id="k-yt-play" class="btn primary">▶ Play induction video</button></div>'+note;
+    loadYtApi(function(){ try{ new YT.Player('k-ytplayer',{ videoId:yid, width:'100%', playerVars:{controls:0,disablekb:1,modestbranding:1,rel:0,fs:0,playsinline:1,iv_load_policy:3},
+      events:{ onReady:function(e){ var ov=document.getElementById('k-yt-play'); if(ov){ ov.onclick=function(){ try{ e.target.playVideo(); }catch(_){} ov.style.display='none'; }; } },
+               onStateChange:function(e){ if(e.data===0){ renderQuiz(); } } } }); }catch(_){ panel.innerHTML='<div class="warnbox">Could not load the video. Please choose “Go to the safety office”.</div>'; } });
+    return;
+  }
+  panel.innerHTML='<div class="vid-wrap"><video id="k-indvid" src="'+esc(url)+'" playsinline controlsList="nodownload noplaybackrate" controls></video></div>'+note;
   var v=document.getElementById('k-indvid'); var maxT=0;
   v.addEventListener('timeupdate',function(){ if(v.currentTime>maxT) maxT=v.currentTime; });
   v.addEventListener('seeking',function(){ if(v.currentTime>maxT+0.6){ v.currentTime=maxT; } });
