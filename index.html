@@ -164,7 +164,7 @@ window.__sbLoad = (window.supabase) ? Promise.resolve(true) : new Promise(functi
   .topbar{position:sticky;top:0;z-index:20;display:flex;align-items:center;gap:12px;background:var(--panel);border-bottom:1px solid var(--line);padding:12px 20px;}
   .topbar h2{font-size:17px;margin:0;flex:1;}
   .icon-btn{width:40px;height:40px;border-radius:10px;border:1px solid var(--line);background:var(--panel);color:var(--paper);cursor:pointer;display:none;align-items:center;justify-content:center;font-size:17px;}
-  .content{padding:22px;max-width:1240px;width:100%;}
+  .content{padding:22px;max-width:1680px;width:100%;}
   .view{display:none;} .view.active{display:block;}
   .scrim{position:fixed;inset:0;background:rgba(10,20,30,.4);z-index:29;display:none;}
   .scrim.show{display:block;}
@@ -692,6 +692,7 @@ async function boot(){
 function paintUser(){
   var ui=document.getElementById('userInfo'); if(ui) ui.textContent=(userName||userEmail||'—')+(userRole?(' · '+userRole.charAt(0).toUpperCase()+userRole.slice(1)):'');
   document.getElementById('sideCompany').textContent=company.name||'JT.3rDegre3';
+  if(typeof applyRole==='function') applyRole();
 }
 
 /* ---------------- data ---------------- */
@@ -922,7 +923,10 @@ function renderDashboard(){
 function barRow(k,v,max,color){ var pct=Math.round(v/max*100); return '<div class="bar-row"><div class="k" title="'+esc(k)+'">'+esc(k)+'</div><div class="track"><div class="fill" style="width:'+pct+'%;background:'+color+';"></div></div><div class="v">'+v+'</div></div>'; }
 function statusPill(v){ return v.status==='on_site'?'<span class="pill on">Inside</span>':v.status==='expected'?'<span class="pill exp">Expected</span>':'<span class="pill out">Checked out</span>'; }
 function masterRow(v){
-  return '<tr data-open="'+v.id+'" style="cursor:pointer;"><td><b>'+esc(v.visitor_name)+'</b></td><td>'+esc(v.visitor_company||'—')+'</td><td>'+esc(v.host||'—')+'</td><td>'+esc(v.purpose||'—')+'</td><td>'+esc(v.vehicle_reg||'—')+'</td><td>'+esc(v.phone||'—')+'</td><td>'+fmtDT(v.signed_in_at)+'</td><td>'+(v.signed_out_at?fmtDT(v.signed_out_at):'—')+'</td><td data-dur="'+(v.status==='on_site'?v.signed_in_at:'')+'">'+dur(v.signed_in_at,v.signed_out_at)+'</td><td>'+statusPill(v)+(v.status==='on_site'?' <button class="btn sm red" data-out="'+v.id+'" style="margin-left:4px;">Out</button>':'')+'</td></tr>';
+  var _dt=v.details||{}; var _att=(_dt.attendees||[]); var _ind='';
+  if(_dt.induction_done){ _ind='<div class="muted" style="font-size:11px;">🦺 Induction done'+(_att.length?(' · '+_att.length+' attendee'+(_att.length>1?'s':'')):'')+'</div>'; }
+  else if(_dt.induction_mode==='not_required'){ _ind='<div class="muted" style="font-size:11px;">Induction: not required</div>'; }
+  return '<tr data-open="'+v.id+'" style="cursor:pointer;"><td><b>'+esc(v.visitor_name)+'</b>'+_ind+'</td><td>'+esc(v.visitor_company||'—')+'</td><td>'+esc(v.host||'—')+'</td><td>'+esc(v.purpose||'—')+'</td><td>'+esc(v.vehicle_reg||'—')+'</td><td>'+esc(v.phone||'—')+'</td><td>'+fmtDT(v.signed_in_at)+'</td><td>'+(v.signed_out_at?fmtDT(v.signed_out_at):'—')+'</td><td data-dur="'+(v.status==='on_site'?v.signed_in_at:'')+'">'+dur(v.signed_in_at,v.signed_out_at)+'</td><td>'+statusPill(v)+(v.status==='on_site'?' <button class="btn sm red" data-out="'+v.id+'" style="margin-left:4px;">Out</button>':'')+(isAdminRole()?' <button class="btn sm" data-del="'+v.id+'" title="Delete log" style="margin-left:4px;border-color:var(--red);color:var(--red);">🗑</button>':'')+'</td></tr>';
 }
 function renderMasterlist(list){
   var el=document.getElementById('masterlist');
@@ -932,7 +936,30 @@ function renderMasterlist(list){
 /* legacy renderLog removed — folder version defined earlier */
 function wireRows(el){
   el.querySelectorAll('[data-out]').forEach(function(b){ b.addEventListener('click',function(ev){ ev.stopPropagation(); signOut(b.getAttribute('data-out')); }); });
+  el.querySelectorAll('[data-del]').forEach(function(b){ b.addEventListener('click',function(ev){ ev.stopPropagation(); deleteVisit(b.getAttribute('data-del')); }); });
   el.querySelectorAll('[data-open]').forEach(function(r){ r.addEventListener('click',function(){ openDetail(r.getAttribute('data-open')); }); });
+}
+function indDetail(v){ var dt=v.details||{}; var att=(dt.attendees||[]); if(!dt.induction_done && dt.induction_mode!=='not_required' && !att.length) return '';
+  var lines=''; if(dt.induction_mode==='not_required'){ lines='<div style="font-size:13px;">Induction: <b>Not required</b> (office / visitor only)</div>'; }
+  else { lines='<div style="font-size:13px;"><b>Induction:</b> '+(dt.induction_done?'Completed':'Pending')+(dt.induction_mode?(' \u00b7 '+esc(String(dt.induction_mode))):'')+'</div>'; }
+  if(att.length){ lines+='<div style="font-size:13px;margin-top:4px;"><b>Attendees:</b><br>'+att.map(function(a){return '\u2022 '+esc(a);}).join('<br>')+'</div>'; }
+  return '<div class="declbox" style="margin-top:10px;font-size:13px;">\ud83e\uddba '+lines+'</div>'; }
+function confirmAdminPassword(actionLabel,onOk){
+  if(!isAdminRole()){ toast('Admins only.'); return; }
+  var html='<h3 style="margin-top:0;">Admin confirmation</h3><div class="muted" style="font-size:13px;margin-bottom:8px;">Enter your account password to '+esc(actionLabel)+'.</div><label>Password</label><input type="password" id="cap-pass" autocomplete="current-password"><div id="cap-msg" class="err" style="margin-top:6px;"></div><div style="display:flex;gap:8px;margin-top:14px;justify-content:flex-end;"><button class="btn sm" id="cap-cancel" type="button">Cancel</button><button class="btn red sm" id="cap-ok" type="button">Confirm</button></div>';
+  showModal(html,function(root){ var pass=root.querySelector('#cap-pass'); if(pass) pass.focus();
+    root.querySelector('#cap-cancel').addEventListener('click',closeModal);
+    root.querySelector('#cap-ok').addEventListener('click',async function(){ var pw=(pass&&pass.value)||''; var msg=root.querySelector('#cap-msg'); if(pw.length<1){ msg.style.color='var(--red)'; msg.textContent='Password required.'; return; } this.disabled=true; msg.style.color='var(--paper-dim)'; msg.textContent='Verifying\u2026'; var ok=false; try{ var r=await sb.auth.signInWithPassword({email:userEmail,password:pw}); ok=!r.error && !!(r.data&&r.data.session); }catch(_){} if(!ok){ msg.style.color='var(--red)'; msg.textContent='Wrong password.'; this.disabled=false; return; } closeModal(); onOk(); });
+  });
+}
+async function deleteVisit(id){
+  if(!isAdminRole()){ toast('Admins only.'); return; }
+  confirmAdminPassword('delete this visitor log',async function(){
+    try{ await sb.from('contractor_permits').delete().eq('visit_id',id); }catch(_){}
+    var d=await sb.from('visits').delete().eq('id',id);
+    if(d.error){ toast('Could not delete (admins only).'); return; }
+    await loadVisits(); try{ await loadPermits(); }catch(_){} renderAll(); toast('Log deleted.');
+  });
 }
 function startDurationTimer(){ setInterval(function(){ document.querySelectorAll('td[data-dur]').forEach(function(td){ var t=td.getAttribute('data-dur'); if(t) td.firstChild ? td.textContent=dur(t,null) : 0; }); },30000); }
 
@@ -963,13 +990,14 @@ function openDetail(id){
     '<div class="grid2" style="font-size:13.5px;"><div><b>Purpose</b><br>'+esc(v.purpose||'—')+'</div><div><b>Status</b><br>'+statusPill(v)+'</div>'+
     '<div><b>Vehicle</b><br>'+esc(v.vehicle_reg||'—')+'</div><div><b>Contact</b><br>'+esc(v.phone||'—')+'</div>'+
     '<div><b>Time in</b><br>'+fmtDT(v.signed_in_at)+'</div><div><b>Time out</b><br>'+(v.signed_out_at?fmtDT(v.signed_out_at):'—')+'</div>'+
-    '<div><b>Duration</b><br>'+dur(v.signed_in_at,v.signed_out_at)+'</div></div>'+permit+
-    '<div style="display:flex;gap:8px;margin-top:16px;justify-content:flex-end;flex-wrap:wrap;">'+actions+(v.status==='on_site'?'<button class="btn red sm" id="dm-out">Sign out</button>':'')+'<button class="btn sm" id="dm-close">Close</button></div>';
+    '<div><b>Duration</b><br>'+dur(v.signed_in_at,v.signed_out_at)+'</div></div>'+indDetail(v)+permit+
+    '<div style="display:flex;gap:8px;margin-top:16px;justify-content:flex-end;flex-wrap:wrap;">'+(isAdminRole()?'<button class="btn sm" id="dm-del" type="button" style="border-color:var(--red);color:var(--red);margin-right:auto;">\ud83d\uddd1 Delete log</button>':'')+actions+(v.status==='on_site'?'<button class="btn red sm" id="dm-out">Sign out</button>':'')+'<button class="btn sm" id="dm-close">Close</button></div>';
   showModal(html, function(root){
     var oo=root.querySelector('#dm-out'); if(oo) oo.addEventListener('click',function(){ signOut(v.id); closeModal(); });
     var ap=root.querySelector('#dm-approve'); if(ap) ap.addEventListener('click',function(){ decidePermitDetail(fp,'approved'); });
     var rj=root.querySelector('#dm-reject'); if(rj) rj.addEventListener('click',function(){ decidePermitDetail(fp,'rejected'); });
     var cp=root.querySelector('#dm-closep'); if(cp) cp.addEventListener('click',function(){ decidePermitDetail(fp,'closed'); });
+    var dd=root.querySelector('#dm-del'); if(dd) dd.addEventListener('click',function(){ closeModal(); deleteVisit(v.id); });
     root.querySelector('#dm-close').addEventListener('click',closeModal);
   });
 }
@@ -1035,6 +1063,7 @@ function renderSettingsForm(){
   renderVidPreview(); renderIQEditor(); if(typeof pcRender==='function') pcRender();
 }
 function activeInductionQuestions(){ var q=settings.induction_questions; return (q && q.length)? q : INDUCTION_QUESTIONS; }
+function showAttendeeCapture(){ var z=document.getElementById('k-ind-att-zone'); if(!z) return; if(document.getElementById('k-ind-att')) return; z.innerHTML='<label>Names of everyone who completed the induction *</label><textarea id="k-ind-att" rows="3" placeholder="One name per line"></textarea><div class="muted" style="font-size:11.5px;">List each person who attended / watched the induction.</div>'; }
 function checklistFor(type){ var pc=settings.permit_checklists; if(pc && pc[type] && pc[type].length) return pc[type].slice(); return (WP_QUESTIONS[type]||[]).concat(WP_COMMON); }
 function pcStash(t,arr){ if(!settings.permit_checklists) settings.permit_checklists={}; settings.permit_checklists[t]=arr; }
 function pcRender(){
@@ -1168,7 +1197,7 @@ document.getElementById('cu-regen').addEventListener('click', async function(){ 
 async function renderCompanyUsers(){
   var tb=document.getElementById('co-users-table'); if(!tb) return;
   var users=[]; try{ var r=await sb.from('profiles').select('id,name,email,role'); if(!r.error&&r.data) users=r.data; }catch(_){}
-  var roles=['admin','officer','reception','viewer'];
+  var roles=['admin','officer','viewer'];
   tb.innerHTML=users.length?'<table><tbody>'+users.map(function(u){return '<tr><td><div style="font-weight:600;">'+esc(u.name||'—')+'</div><div class="muted" style="font-size:11.5px;">'+esc(u.email||'')+'</div></td><td><select class="mrole" data-uid="'+esc(u.id)+'">'+roles.map(function(r){return '<option value="'+r+'"'+(u.role===r?' selected':'')+'>'+r.charAt(0).toUpperCase()+r.slice(1)+'</option>';}).join('')+'</select></td><td style="text-align:right;"><button class="btn sm" data-rm="'+esc(u.id)+'" data-name="'+esc(u.name||u.email||'')+'" style="border-color:var(--red);color:var(--red);">Remove</button></td></tr>';}).join('')+'</tbody></table>':'<div class="empty">No team members yet.</div>';
   tb.querySelectorAll('select[data-uid]').forEach(function(sel){ var prev=sel.value; sel.addEventListener('change',async function(){ sel.disabled=true; var r=await sb.rpc('set_member_role',{p_profile:sel.dataset.uid,p_role:sel.value}); sel.disabled=false; if(r.error){toast(r.error.message||'Admins only.');sel.value=prev;return;} toast('Role updated.'); }); });
   tb.querySelectorAll('[data-rm]').forEach(function(b){ b.addEventListener('click',async function(){ if(b.dataset.rm===(myId||'')){toast("You can't remove your own account.");return;} if(!confirm('Remove '+b.dataset.name+'? Their login is deleted.'))return; b.disabled=true; var removed=false; try{ var r=await sb.functions.invoke('admin-members',{body:{action:'delete',id:b.dataset.rm}}); if(!r.error&&r.data&&r.data.ok){removed=true;} else if(r.data&&r.data.error){toast(r.data.error);b.disabled=false;return;} }catch(_){} if(!removed){ var d=await sb.from('profiles').delete().eq('id',b.dataset.rm); if(d.error){toast('Admins only.');b.disabled=false;return;} } toast('Member removed.'); renderCompanyUsers(); }); });
@@ -1215,18 +1244,28 @@ wireAccount();
 
 /* ---------------- navigation ---------------- */
 var TITLES={dashboard:'Dashboard',visitors:'Visitor Logs',permits:'Work Permits',sites:'Sites',settings:'Kiosk QR & rules',company:'Company Setup'};
+function roleLevel(){ if(isOwner) return 'admin'; var r=(userRole||'').toLowerCase(); if(r==='admin') return 'admin'; if(r==='officer'||r==='reception') return 'officer'; return 'viewer'; }
+function isAdminRole(){ return roleLevel()==='admin'; }
+function navAccess(){ var lv=roleLevel(); if(lv==='admin') return ['dashboard','visitors','kiosk-open','company']; if(lv==='officer') return ['dashboard','visitors']; return ['dashboard']; }
+function applyRole(){ var allow=navAccess();
+  document.querySelectorAll('.navi[data-view]').forEach(function(n){ n.style.display=(allow.indexOf(n.dataset.view)>=0)?'':'none'; });
+  var qk=document.getElementById('quickKiosk'); if(qk) qk.style.display=(allow.indexOf('kiosk-open')>=0)?'':'none';
+  var cur=((document.querySelector('.view.active')||{}).id||'').replace('v-',''); var base=(cur==='settings'||cur==='sites'||cur==='permits')?'company':cur;
+  if(cur && allow.indexOf(base)<0) goView('dashboard');
+}
 function goView(v){
+  if(typeof navAccess==='function'){ var _al=navAccess(); var _b=(v==='settings'||v==='sites'||v==='permits')?'company':v; if(_al.indexOf(_b)<0){ v='dashboard'; } }
   document.querySelectorAll('.navi[data-view]').forEach(function(n){ n.classList.toggle('active', n.dataset.view===v); });
   document.querySelectorAll('.view').forEach(function(s){ s.classList.remove('active'); });
   var el=document.getElementById('v-'+v); if(el) el.classList.add('active');
   document.getElementById('viewTitle').textContent=TITLES[v]||'';
   closeSidebar();
 }
-document.querySelectorAll('.navi[data-view]').forEach(function(n){ n.addEventListener('click',function(){ var v=n.dataset.view; if(v==='kiosk-open'){ openKiosk('admin'); return; } goView(v); }); });
+document.querySelectorAll('.navi[data-view]').forEach(function(n){ n.addEventListener('click',function(){ var v=n.dataset.view; if(navAccess().indexOf(v)<0){ goView('dashboard'); return; } if(v==='kiosk-open'){ openKiosk('admin'); return; } goView(v); }); });
 document.getElementById('menuBtn').addEventListener('click',function(){ document.getElementById('sidebar').classList.toggle('open'); document.getElementById('scrim').classList.toggle('show'); });
 document.getElementById('scrim').addEventListener('click',closeSidebar);
 function closeSidebar(){ document.getElementById('sidebar').classList.remove('open'); document.getElementById('scrim').classList.remove('show'); }
-document.getElementById('quickKiosk').addEventListener('click',function(){ openKiosk('admin'); });
+document.getElementById('quickKiosk').addEventListener('click',function(){ if(navAccess().indexOf('kiosk-open')<0){ toast('Admins only.'); return; } openKiosk('admin'); });
 document.getElementById('cov').addEventListener('change',renderDashboard);
 document.getElementById('refreshBtn').addEventListener('click',async function(){ this.disabled=true; await loadVisits(); renderDashboard(); this.disabled=false; toast('Analytics refreshed.'); });
 document.getElementById('csvBtn').addEventListener('click',function(){
@@ -1328,7 +1367,7 @@ function wpInductionCard(){
   return '<div class="pcard"><div class="ph">🦺 Safety induction</div>'+
     '<label>Has EVERYONE who will work completed the safety induction? *</label>'+
     '<div class="tri" data-tri="__ind" id="k-ind-tri" style="margin-top:2px;flex-wrap:wrap;"><button type="button" class="tb ok" data-v="Yes" style="width:auto;padding:8px 18px;">Yes</button><button type="button" class="tb no" data-v="No" style="width:auto;padding:8px 18px;">No</button><button type="button" class="tb na" data-v="N/A" style="width:auto;padding:8px 14px;">Not required</button></div>'+
-    '<div id="k-ind-flow" style="margin-top:10px;"></div></div>';
+    '<div id="k-ind-flow" style="margin-top:10px;"></div><div id="k-ind-att-zone" style="margin-top:10px;"></div></div>';
 }
 function wpWireInduction(){
   var tri=document.getElementById('k-ind-tri'); if(!tri) return;
@@ -1336,13 +1375,14 @@ function wpWireInduction(){
 }
 function renderIndFlow(){
   var el=document.getElementById('k-ind-flow'); if(!el) return;
+  var _az=document.getElementById('k-ind-att-zone'); if(_az) _az.innerHTML='';
   if(_permitState.ind==='N/A'){ el.innerHTML='<div class="declbox2" style="margin-top:6px;">I confirm that I will <b>NOT</b> enter the operational site or carry out any work. I am only visiting the office / reception and will remain in visitor areas at all times.</div>'; return; }
   if(_permitState.ind!=='No'){ el.innerHTML=''; return; }
   el.innerHTML='<div class="warnbox">Everyone must complete the safety induction before working. Choose one:</div>'+
     '<button type="button" class="opt-btn" id="k-ind-office">🏢 Go to the safety office for induction</button>'+
     '<button type="button" class="opt-btn" id="k-ind-video">▶️ Watch the safety induction video now</button>'+
     '<div id="k-ind-panel" style="margin-top:10px;"></div>';
-  document.getElementById('k-ind-office').addEventListener('click',function(){ _permitState.mode='office'; _permitState.passed=false; markOpt('k-ind-office'); document.getElementById('k-ind-panel').innerHTML='<div class="declbox2">Please proceed to the <b>safety office</b> for your induction. You may continue and submit this form now.</div>'; });
+  document.getElementById('k-ind-office').addEventListener('click',function(){ _permitState.mode='office'; _permitState.passed=false; markOpt('k-ind-office'); document.getElementById('k-ind-panel').innerHTML='<div class="declbox2">Please proceed to the <b>safety office</b> for your induction. You may continue and submit this form now.</div>'; showAttendeeCapture(); });
   document.getElementById('k-ind-video').addEventListener('click',function(){ _permitState.mode='video'; _permitState.passed=false; markOpt('k-ind-video'); showInductionVideo(); });
 }
 function markOpt(id){ ['k-ind-office','k-ind-video'].forEach(function(x){ var e=document.getElementById(x); if(e) e.classList.toggle('on', x===id); }); }
@@ -1374,7 +1414,7 @@ function renderQuiz(){
   document.getElementById('k-quiz-submit').addEventListener('click',function(){
     var ok=true; Q.forEach(function(it,i){ var sel=document.querySelector('input[name="iq'+i+'"]:checked'); if(!sel||(+sel.value)!==it.correct) ok=false; });
     var m=document.getElementById('k-quiz-msg');
-    if(ok){ _permitState.passed=true; m.style.color='var(--green)'; m.textContent='✓ Induction passed — you may continue.'; }
+    if(ok){ _permitState.passed=true; m.style.color='var(--green)'; m.textContent='✓ Induction passed — you may continue.'; showAttendeeCapture(); }
     else { _permitState.passed=false; m.style.color='var(--red)'; m.textContent='Some answers are incorrect — please review the video and try again.'; }
   });
 }
@@ -1412,12 +1452,14 @@ async function kioskSubmit(){
   var phoneEl=document.getElementById('k-phone'); if(phoneEl && !phoneEl.value.trim()){ return fail('Please enter your contact number.'); }
   if(_permitState.ind===''){ return fail('Please answer the safety induction question.'); }
   if(_permitState.ind==='No' && _permitState.mode!=='office' && !_permitState.passed){ return fail('Complete the induction video and questions, or choose the safety office.'); }
+  var attendees=[]; var attEl=document.getElementById('k-ind-att'); if(attEl){ attendees=attEl.value.split(/\n|,/).map(function(x){return x.trim();}).filter(Boolean); }
+  if(_permitState.ind==='No' && !attendees.length){ return fail('Please enter the name(s) of everyone who completed the induction.'); }
   var dT=document.getElementById('k-decl-truth'), dG=document.getElementById('k-decl-gdpr');
   if(!dT||!dT.checked){ return fail('Please accept the truthfulness declaration.'); }
   if(!dG||!dG.checked){ return fail('Please accept the data protection (GDPR) declaration.'); }
   if(!_permitState.sig){ return fail('Please sign in the signature box.'); }
   var inductionDone=(_permitState.ind==='Yes')||(_permitState.passed===true);
-  var details={ signature:_permitState.sig, induction_done:inductionDone, induction_mode:(_permitState.ind==='Yes'?'prior':(_permitState.ind==='N/A'?'not_required':(_permitState.mode||''))), gdpr_ack:true, truth_ack:true }, permitPayload=null;
+  var details={ signature:_permitState.sig, induction_done:inductionDone, induction_mode:(_permitState.ind==='Yes'?'prior':(_permitState.ind==='N/A'?'not_required':(_permitState.mode||''))), gdpr_ack:true, truth_ack:true, attendees:attendees }, permitPayload=null;
   if(purpose==='Contractor'){
     var wemail=(document.getElementById('k-wemail')||{}).value||'';
     var desc=(document.getElementById('k-wdesc')||{}).value||'', loc=(document.getElementById('k-wloc')||{}).value||'';
