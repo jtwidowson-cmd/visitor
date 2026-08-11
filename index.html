@@ -278,7 +278,31 @@ window.__sbLoad = (window.supabase) ? Promise.resolve(true) : new Promise(functi
   .declbox2{background:var(--panel-2);border:1px solid var(--line);border-radius:10px;padding:12px 14px;font-size:13px;margin-top:10px;line-height:1.5;}
   .declbox2 .ackline{display:flex;gap:8px;align-items:flex-start;margin-top:8px;text-transform:none;color:var(--paper);font-weight:500;font-size:13px;}
   @media(max-width:560px){ .permit-q{grid-template-columns:1fr;} .dtsplit{grid-template-columns:1fr 1fr;} }
-@media print{ .sidebar,.topbar,.icon-btn,#jtThemeBtn,.no-print{display:none !important;} .content{max-width:none;padding:0;} body{background:#fff;} }
+  /* ---- responsive: mobile / tablet ---- */
+  @media(max-width:860px){
+    .icon-btn{display:inline-flex;}
+    .sidebar{position:fixed;left:0;top:0;height:100vh;transform:translateX(-100%);transition:transform .22s ease;z-index:40;box-shadow:0 12px 40px rgba(0,0,0,.35);width:250px;}
+    .sidebar.open{transform:translateX(0);}
+    .content{padding:16px;}
+    .g2{grid-template-columns:1fr;} .grid2{grid-template-columns:1fr;}
+    .cov-bar{justify-content:flex-start;}
+    .topbar h2{font-size:16px;}
+  }
+  @media(max-width:560px){
+    .content{padding:12px;}
+    .tile{padding:14px 16px;} .tile .n{font-size:24px;} .tile .badge{width:40px;height:40px;font-size:18px;}
+    .pcard{padding:14px;} .card{padding:16px;}
+    .kiosk{padding:10px;} .kiosk-card{padding:16px;border-radius:16px;}
+    .kiosk-top .t .n{font-size:16px;}
+    .dpf-item{width:150px;height:100px;}
+    .btn{min-height:46px;} .btn.sm{min-height:38px;}
+    input,select,textarea{font-size:16px;}
+    .qrow{grid-template-columns:1fr;gap:8px;} .qrow .tri{justify-self:start;}
+    .tri .tb{width:56px;height:44px;}
+    .side-actions{gap:8px;} .side-actions .btn{min-height:46px;}
+    h2,.topbar h2{font-size:16px;}
+  }
+  @media print{ .sidebar,.topbar,.icon-btn,#jtThemeBtn,.no-print{display:none !important;} .content{max-width:none;padding:0;} body{background:#fff;} }
 </style>
 </head>
 <body>
@@ -427,35 +451,12 @@ window.__sbLoad = (window.supabase) ? Promise.resolve(true) : new Promise(functi
 
       <!-- SETTINGS + KIOSK QR -->
       <section class="view" id="v-settings">
-        <div class="grid2">
-          <div class="card">
-            <div class="sec-h">Kiosk QR code</div>
-            <div class="muted" style="font-size:13px;margin-bottom:10px;">Print this and place it at reception. Visitors scan it to sign in/out from their own phone — no app needed.</div>
-            <div id="qrBox" style="text-align:center;padding:10px;"></div>
-            <div style="display:flex;gap:8px;margin-top:8px;"><button class="btn sm" id="qrPrint">🖨️ Print QR</button><button class="btn sm" id="qrRegen">Regenerate token</button></div>
-            <div class="muted" style="font-size:12px;margin-top:8px;word-break:break-all;" id="qrUrl"></div>
-          </div>
-          <div class="card">
-            <div class="sec-h">Safety induction &amp; rules</div>
-            <label>Induction / site rules</label><textarea id="se-induction" rows="5" placeholder="e.g. All visitors must be accompanied. PPE required in marked areas…"></textarea>
-            <label>Emergency information</label><textarea id="se-emergency" rows="2" placeholder="e.g. On the alarm, assemble at the car park."></textarea>
-            <div class="row" style="margin-top:12px;">
-              <label style="display:flex;align-items:center;gap:8px;text-transform:none;font-size:14px;color:var(--paper);"><input type="checkbox" id="se-ind" style="width:18px;height:18px;"> Require induction acknowledgement</label>
-              <label style="display:flex;align-items:center;gap:8px;text-transform:none;font-size:14px;color:var(--paper);"><input type="checkbox" id="se-veh" style="width:18px;height:18px;"> Require vehicle plate</label>
-            </div>
-            <hr style="border:none;border-top:1px solid var(--line);margin:16px 0;">
-            <div class="sec-h">Declarations (shown at every sign-in)</div>
-            <label>Truthfulness declaration</label><textarea id="se-decl-truth" rows="3"></textarea>
-            <label>Data protection / GDPR declaration</label><textarea id="se-decl-gdpr" rows="3"></textarea>
-            <div class="muted" style="font-size:11.5px;margin-top:4px;">Tip: use {company} to auto-insert your company name.</div>
-            <hr style="border:none;border-top:1px solid var(--line);margin:16px 0;">
-            <div class="sec-h">Safety induction video</div>
-            <div class="muted" style="font-size:12.5px;margin-bottom:8px;">Shown when a visitor answers that they have <b>not</b> completed the induction. Upload a video (MP4) or paste a direct link.</div>
-            <div style="display:flex;gap:8px;align-items:center;flex-wrap:wrap;"><input type="file" id="se-vid-file" accept="video/*" style="flex:1;min-width:180px;"><button class="btn sm" id="se-vid-upload" type="button">Upload video</button></div>
-            <label>Video link (MP4)</label><input id="se-vid-url" placeholder="https://…/induction.mp4">
-            <div id="se-vid-preview"></div>
-            <button class="btn primary" id="se-save" style="margin-top:16px;">Save settings</button>
-          </div>
+        <div class="card" style="max-width:520px;">
+          <div class="sec-h">Kiosk QR code</div>
+          <div class="muted" style="font-size:13px;margin-bottom:10px;">Print this and place it at reception. Visitors scan it to sign in/out from their own phone — no app needed.</div>
+          <div id="qrBox" style="text-align:center;padding:10px;"></div>
+          <div style="display:flex;gap:8px;margin-top:8px;flex-wrap:wrap;"><button class="btn sm" id="qrPrint">🖨️ Print QR</button><button class="btn sm" id="qrRegen">Regenerate token</button></div>
+          <div class="muted" style="font-size:12px;margin-top:8px;word-break:break-all;" id="qrUrl"></div>
         </div>
       </section>
 
@@ -481,9 +482,29 @@ window.__sbLoad = (window.supabase) ? Promise.resolve(true) : new Promise(functi
           <div id="wg-list" style="display:flex;gap:10px;flex-wrap:wrap;margin-top:12px;"></div>
         </div>
         <div class="card">
-          <div class="sec-h">Kiosk QR &amp; Safety induction</div>
-          <div class="muted" style="font-size:13px;margin-bottom:10px;">Manage your kiosk QR code and the induction / site rules shown at sign-in.</div>
-          <button class="btn" id="open-kioskrules" type="button">🖥️ Open Kiosk QR &amp; Induction rules</button>
+          <div class="sec-h">Safety induction &amp; declarations</div>
+          <label>Induction / site rules</label><textarea id="se-induction" rows="4" placeholder="e.g. All visitors must be accompanied. PPE required in marked areas…"></textarea>
+          <label>Emergency information</label><textarea id="se-emergency" rows="2" placeholder="e.g. On the alarm, assemble at the car park."></textarea>
+          <div class="row" style="margin-top:12px;gap:16px;flex-wrap:wrap;">
+            <label style="display:flex;align-items:center;gap:8px;text-transform:none;font-size:14px;color:var(--paper);"><input type="checkbox" id="se-ind" style="width:18px;height:18px;"> Require induction acknowledgement</label>
+            <label style="display:flex;align-items:center;gap:8px;text-transform:none;font-size:14px;color:var(--paper);"><input type="checkbox" id="se-veh" style="width:18px;height:18px;"> Require vehicle plate</label>
+          </div>
+          <hr style="border:none;border-top:1px solid var(--line);margin:16px 0;">
+          <div class="sec-h">Declarations (shown at every sign-in)</div>
+          <label>Truthfulness declaration</label><textarea id="se-decl-truth" rows="3"></textarea>
+          <label>Data protection / GDPR declaration</label><textarea id="se-decl-gdpr" rows="3"></textarea>
+          <div class="muted" style="font-size:11.5px;margin-top:4px;">Tip: use {company} to auto-insert your company name.</div>
+          <hr style="border:none;border-top:1px solid var(--line);margin:16px 0;">
+          <div class="sec-h">Safety induction video</div>
+          <div class="muted" style="font-size:12.5px;margin-bottom:8px;">Shown when a visitor answers that they have <b>not</b> completed the induction. Upload a video (MP4) or paste a direct link. Then press <b>Save</b>.</div>
+          <div style="display:flex;gap:8px;align-items:center;flex-wrap:wrap;"><input type="file" id="se-vid-file" accept="video/*" style="flex:1;min-width:170px;"><button class="btn" id="se-vid-upload" type="button">⬆️ Upload video</button></div>
+          <label>Video link (MP4)</label><input id="se-vid-url" placeholder="https://…/induction.mp4">
+          <div id="se-vid-preview"></div>
+          <button class="btn primary" id="se-save" style="margin-top:16px;">Save induction &amp; declarations</button>
+        </div>
+        <div class="card">
+          <div class="sec-h">Kiosk QR &amp; Sites</div>
+          <button class="btn" id="open-kioskrules" type="button">🖥️ Kiosk QR code</button>
           <button class="btn" id="open-sites" type="button" style="margin-top:8px;">📍 Sites / locations</button>
         </div>
         <div class="grid2">
@@ -1147,6 +1168,7 @@ function kioskSignIn(){
     '<label>Vehicle plate number'+(needVeh?' *':'')+'</label><input id="k-veh" placeholder="ABC 1234 / N/A">'+
     '<label>Contact number</label><input id="k-phone" placeholder="0917XXXXXXX">'+
     (needInd?'<label>Site induction — please read</label><div class="induction-box">'+esc(info.induction_text)+((info.emergency_text||'').trim()?'\n\nEMERGENCY:\n'+esc(info.emergency_text):'')+'</div><label class="ack"><input type="checkbox" id="k-ack"> I have read and understood the site rules and emergency procedures.</label>':'')+
+    '<div id="k-sigzone" style="margin-top:4px;"></div>'+
     '<div style="display:flex;gap:10px;margin-top:16px;"><button class="btn full" id="k-cancel">Cancel</button><button class="btn green full" id="k-submit">Submit Time In</button></div><div id="k-msg" class="err"></div>';
   document.getElementById('k-back').addEventListener('click',kioskHome);
   document.getElementById('k-cancel').addEventListener('click',kioskHome);
@@ -1154,17 +1176,20 @@ function kioskSignIn(){
   document.getElementById('k-submit').addEventListener('click',kioskSubmit);
 }
 var _permitState={ind:'',mode:'',passed:false,tri:{},sig:null};
+function speak(t){ try{ if('speechSynthesis' in window && t){ window.speechSynthesis.cancel(); var u=new SpeechSynthesisUtterance(String(t)); u.rate=1; u.pitch=1; u.lang='en-GB'; window.speechSynthesis.speak(u); } }catch(_){}}
 function triHTML(key){ return '<div class="tri" data-tri="'+key+'"><button type="button" class="tb ok" data-v="Yes">✓</button><button type="button" class="tb no" data-v="No">✗</button><button type="button" class="tb na" data-v="N/A">N/A</button></div>'; }
 function wireTri(root){ if(!root) return; root.querySelectorAll('.tri').forEach(function(tr){ tr.querySelectorAll('.tb').forEach(function(b){ b.addEventListener('click',function(){ tr.querySelectorAll('.tb').forEach(function(x){x.classList.remove('on');}); b.classList.add('on'); _permitState.tri[tr.getAttribute('data-tri')]=b.getAttribute('data-v'); }); }); }); }
 function renderPermit(){
   var box=document.getElementById('k-maint'); var p=document.getElementById('k-purpose').value;
   document.getElementById('k-submit').textContent=(p==='Contractor')?'Submit permit & Time In':'Submit Time In';
-  if(!p){ box.innerHTML=''; return; }
+  var sz=document.getElementById('k-sigzone');
+  if(!p){ box.innerHTML=''; if(sz) sz.innerHTML=''; return; }
   _permitState={ind:'',mode:'',passed:false,tri:{},sig:null};
   var html='';
   if(p==='Contractor') html+=wpContractorCard();
-  html+=wpInductionCard()+wpDeclCard()+wpSignCard();
+  html+=wpInductionCard()+wpDeclCard();
   box.innerHTML=html;
+  if(sz) sz.innerHTML=wpSignCard();
   if(p==='Contractor'){ fillControls(); var ts=document.getElementById('k-wtype'); if(ts) ts.addEventListener('change',fillControls); }
   wpWireInduction(); wpInitSig();
 }
@@ -1250,29 +1275,30 @@ function wpInitSig(){
 }
 async function kioskSubmit(){
   var msg=document.getElementById('k-msg'); msg.textContent='';
-  var name=document.getElementById('k-name').value.trim(); if(!name){ msg.textContent='Please enter your full name.'; return; }
+  function fail(t){ msg.textContent=t; speak(t); return true; }
+  var name=document.getElementById('k-name').value.trim(); if(!name){ return fail('Please enter your full name.'); }
   var info=kInfo();
-  if(info.require_vehicle){ var vv=document.getElementById('k-veh'); if(vv&&!vv.value.trim()){ msg.textContent='Vehicle plate is required.'; return; } }
-  var ackEl=document.getElementById('k-ack'); if(ackEl && !ackEl.checked){ msg.textContent='Please confirm you read the site rules.'; return; }
+  if(info.require_vehicle){ var vv=document.getElementById('k-veh'); if(vv&&!vv.value.trim()){ return fail('Vehicle plate is required.'); } }
+  var ackEl=document.getElementById('k-ack'); if(ackEl && !ackEl.checked){ return fail('Please confirm you read the site rules.'); }
   var purpose=document.getElementById('k-purpose').value||'';
-  if(!purpose){ msg.textContent='Please select the purpose of visit.'; return; }
+  if(!purpose){ return fail('Please select the purpose of visit.'); }
   if(_permitState.ind!=='Yes'){
-    if(_permitState.ind!=='No'){ msg.textContent='Please answer the safety induction question.'; return; }
-    if(_permitState.mode!=='office' && !_permitState.passed){ msg.textContent='Complete the induction video and questions, or choose the safety office.'; return; }
+    if(_permitState.ind!=='No'){ return fail('Please answer the safety induction question.'); }
+    if(_permitState.mode!=='office' && !_permitState.passed){ return fail('Complete the induction video and questions, or choose the safety office.'); }
   }
   var dT=document.getElementById('k-decl-truth'), dG=document.getElementById('k-decl-gdpr');
-  if(!dT||!dT.checked){ msg.textContent='Please accept the truthfulness declaration.'; return; }
-  if(!dG||!dG.checked){ msg.textContent='Please accept the data protection (GDPR) declaration.'; return; }
-  if(!_permitState.sig){ msg.textContent='Please sign in the signature box.'; return; }
+  if(!dT||!dT.checked){ return fail('Please accept the truthfulness declaration.'); }
+  if(!dG||!dG.checked){ return fail('Please accept the data protection (GDPR) declaration.'); }
+  if(!_permitState.sig){ return fail('Please sign in the signature box.'); }
   var inductionDone=(_permitState.ind==='Yes')||(_permitState.passed===true);
   var details={ signature:_permitState.sig, induction_done:inductionDone, induction_mode:(_permitState.ind==='Yes'?'prior':(_permitState.mode||'')), gdpr_ack:true, truth_ack:true }, permitPayload=null;
   if(purpose==='Contractor'){
     var wemail=(document.getElementById('k-wemail')||{}).value||'';
     var desc=(document.getElementById('k-wdesc')||{}).value||'', loc=(document.getElementById('k-wloc')||{}).value||'';
     var wtype=(document.getElementById('k-wtype')||{}).value||WP_TYPES[0];
-    if(!/^[^@\s]+@[^@\s]+\.[^@\s]+$/.test(wemail)){ msg.textContent='Enter a valid applicant email.'; return; }
-    if(!desc.trim()){ msg.textContent='Describe the contractor work.'; return; }
-    if(!loc.trim()){ msg.textContent='Enter the work location.'; return; }
+    if(!/^[^@\s]+@[^@\s]+\.[^@\s]+$/.test(wemail)){ return fail('Enter a valid applicant email.'); }
+    if(!desc.trim()){ return fail('Describe the contractor work.'); }
+    if(!loc.trim()){ return fail('Enter the work location.'); }
     var qlabels=(WP_QUESTIONS[wtype]||[]).concat(WP_COMMON); var wans={};
     qlabels.forEach(function(q,i){ wans[q]=_permitState.tri['q'+i]||''; });
     permitPayload={ ref:'WP-'+ymd().replace(/-/g,'')+'-'+String(((permits||[]).length+1)).padStart(3,'0'), permit_type:wtype,
@@ -1300,7 +1326,7 @@ async function kioskSubmit(){
     }
   }catch(_){}
   b.disabled=false; b.textContent=(purpose==='Contractor')?'Submit permit & Time In':'Submit Time In';
-  if(!okDone){ msg.textContent='Could not sign in. Please tell reception.'; return; }
+  if(!okDone){ return fail('Could not sign in. Please tell reception.'); }
   kioskDone('You are signed in', purpose==='Contractor' ? ('Permit logged. Welcome, '+esc(name2)+'. Please report to your site contact.') : ('Welcome, '+esc(name2)+'. Enjoy your visit.'));
 }
 async function kioskSignOutList(){
