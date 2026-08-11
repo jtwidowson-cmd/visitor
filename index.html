@@ -500,6 +500,10 @@ window.__sbLoad = (window.supabase) ? Promise.resolve(true) : new Promise(functi
           <div style="display:flex;gap:8px;align-items:center;flex-wrap:wrap;"><input type="file" id="se-vid-file" accept="video/*" style="flex:1;min-width:170px;"><button class="btn" id="se-vid-upload" type="button">⬆️ Upload video</button></div>
           <label>Video link (MP4)</label><input id="se-vid-url" placeholder="https://…/induction.mp4">
           <div id="se-vid-preview"></div>
+          <hr style="border:none;border-top:1px solid var(--line);margin:16px 0;">
+          <div class="sec-h">Induction video questions (5)</div>
+          <div class="muted" style="font-size:12px;margin-bottom:6px;">Shown after the safety video. The visitor must answer all correctly to continue. Edit the questions, options and the correct answer.</div>
+          <div id="se-iq-editor"></div>
           <button class="btn primary" id="se-save" style="margin-top:16px;">Save induction &amp; declarations</button>
         </div>
         <div class="card">
@@ -577,16 +581,16 @@ var APP_KEY='visitor';
 var DECL_TRUTH_DEFAULT='I confirm that all information in this permit is true and accurate. I accept that the company is not liable for any consequences arising from false or misleading information provided by me.';
 var DECL_GDPR_DEFAULT='By registering using this form, you acknowledge that {company} will collect and process your personal data for the purposes of site access registration and record-keeping in accordance with the General Data Protection Regulation (GDPR) and the Data Protection Act 2018 (Ireland).';
 var INDUCTION_QUESTIONS=[
-  {q:'What must you wear in all marked PPE areas?',opts:['Whatever is comfortable','The correct PPE (hi-vis, safety boots, hard hat)','Only gloves'],correct:1},
-  {q:'If the fire alarm sounds, what do you do?',opts:['Finish the task first','Stop work and go to the muster point','Hide nearby'],correct:1},
-  {q:'May you enter barriered or restricted areas?',opts:['Yes, anytime','No, unless authorised','Only at lunch'],correct:1},
-  {q:'Who do you report a hazard or accident to?',opts:['No one','Your site contact / supervisor','Another visitor'],correct:1},
-  {q:'May you operate plant/equipment you are not trained or authorised for?',opts:['Yes','No','If it looks easy'],correct:1}
+  {q:'What must you wear at all times in marked PPE areas?',opts:['Only when you feel like it','Full correct PPE — hard hat, hi-vis, safety boots and any eye/ear protection required','Just a hi-vis vest'],correct:1},
+  {q:'Before using any tool or equipment, you must:',opts:['Use it straight away','Check it is inspected, in date and fit for use — and report any defects','Borrow one without checking'],correct:1},
+  {q:'Who may operate plant, machinery or equipment on site?',opts:['Anyone on site','Only trained, competent and authorised persons','Any contractor'],correct:1},
+  {q:'Moving plant and equipment (excavators, loaders, dumpers) are a major hazard. You should:',opts:['Walk close to watch them work','Keep clear, use pedestrian routes and make eye contact with the operator','Assume the operator can see you'],correct:1},
+  {q:'If you see a hazard, near-miss or accident, you must:',opts:['Ignore it','Report it immediately to your site contact or supervisor','Try to fix it even if untrained'],correct:1}
 ];
 var sb=null; function initSb(){ if(sb) return true; try{ if(window.supabase && window.supabase.createClient){ sb=window.supabase.createClient(SUPABASE_URL, SUPABASE_ANON_KEY); return true; } }catch(e){ console.error('Supabase init failed',e); } return false; } initSb();
 var userEmail='', userName='', userRole='', isOwner=false, myId=null;
 var company={id:null,name:'',invite:'',email:''};
-var settings={induction_text:'',emergency_text:'',require_induction:false,require_vehicle:false,kiosk_token:'',decl_truth:'',decl_gdpr:'',induction_video_url:''};
+var settings={induction_text:'',emergency_text:'',require_induction:false,require_vehicle:false,kiosk_token:'',decl_truth:'',decl_gdpr:'',induction_video_url:'',induction_questions:null};
 var sites=[], visits=[];
 var PURPOSES=['Contractor','Delivery','Customer','Visitor','Others'];
 var PERMIT_TYPES=['General Work','Hot Work','Working at Height','Confined Space','Electrical / Isolation (LOTO)','Excavation','Lifting Operation','Blasting (Quarry)'];
@@ -684,7 +688,7 @@ async function loadCompany(){
 }
 async function loadSettings(){
   try{ var r=await sb.from('visit_settings').select('*').limit(1).single();
-    if(r.data){ settings={induction_text:r.data.induction_text||'',emergency_text:r.data.emergency_text||'',require_induction:!!r.data.require_induction,require_vehicle:!!r.data.require_vehicle,kiosk_token:r.data.kiosk_token||'',decl_truth:r.data.decl_truth||'',decl_gdpr:r.data.decl_gdpr||'',induction_video_url:r.data.induction_video_url||''}; }
+    if(r.data){ settings={induction_text:r.data.induction_text||'',emergency_text:r.data.emergency_text||'',require_induction:!!r.data.require_induction,require_vehicle:!!r.data.require_vehicle,kiosk_token:r.data.kiosk_token||'',decl_truth:r.data.decl_truth||'',decl_gdpr:r.data.decl_gdpr||'',induction_video_url:r.data.induction_video_url||'',induction_questions:(r.data.induction_questions&&r.data.induction_questions.length?r.data.induction_questions:null)}; }
   }catch(_){}
 }
 async function loadSites(){ try{ var r=await sb.from('visitor_sites').select('*').order('name'); sites=(!r.error&&r.data)?r.data:[]; }catch(_){ sites=[]; } }
@@ -1014,13 +1018,37 @@ function renderSettingsForm(){
   var dt=document.getElementById('se-decl-truth'); if(dt) dt.value=settings.decl_truth||DECL_TRUTH_DEFAULT;
   var dg=document.getElementById('se-decl-gdpr'); if(dg) dg.value=settings.decl_gdpr||DECL_GDPR_DEFAULT;
   var vu=document.getElementById('se-vid-url'); if(vu) vu.value=settings.induction_video_url||'';
-  renderVidPreview();
+  renderVidPreview(); renderIQEditor();
+}
+function activeInductionQuestions(){ var q=settings.induction_questions; return (q && q.length)? q : INDUCTION_QUESTIONS; }
+function renderIQEditor(){
+  var box=document.getElementById('se-iq-editor'); if(!box) return;
+  var qs=(settings.induction_questions && settings.induction_questions.length)? settings.induction_questions : INDUCTION_QUESTIONS;
+  var out='';
+  for(var i=0;i<5;i++){ var it=qs[i]||{q:'',opts:['','',''],correct:0}; var op=it.opts||['','',''];
+    out+='<div class="pcard" style="margin-top:10px;padding:14px;"><label>Question '+(i+1)+'</label><input class="iq-q" data-i="'+i+'" value="'+esc(it.q||'')+'">'+
+      '<div class="g2"><div><label>Option A</label><input class="iq-o" data-i="'+i+'" data-o="0" value="'+esc(op[0]||'')+'"></div><div><label>Option B</label><input class="iq-o" data-i="'+i+'" data-o="1" value="'+esc(op[1]||'')+'"></div></div>'+
+      '<div class="g2"><div><label>Option C</label><input class="iq-o" data-i="'+i+'" data-o="2" value="'+esc(op[2]||'')+'"></div><div><label>Correct answer</label><select class="iq-c" data-i="'+i+'"><option value="0"'+(it.correct===0?' selected':'')+'>Option A</option><option value="1"'+(it.correct===1?' selected':'')+'>Option B</option><option value="2"'+(it.correct===2?' selected':'')+'>Option C</option></select></div></div></div>';
+  }
+  box.innerHTML=out;
+}
+function readIQEditor(){
+  var box=document.getElementById('se-iq-editor'); if(!box) return null; var arr=[];
+  for(var i=0;i<5;i++){
+    var q=((box.querySelector('.iq-q[data-i="'+i+'"]')||{}).value||'').trim();
+    var a=(box.querySelector('.iq-o[data-i="'+i+'"][data-o="0"]')||{}).value||'';
+    var b=(box.querySelector('.iq-o[data-i="'+i+'"][data-o="1"]')||{}).value||'';
+    var cc=(box.querySelector('.iq-o[data-i="'+i+'"][data-o="2"]')||{}).value||'';
+    var cor=parseInt((box.querySelector('.iq-c[data-i="'+i+'"]')||{}).value,10)||0;
+    if(q) arr.push({q:q,opts:[a,b,cc],correct:cor});
+  }
+  return arr;
 }
 function renderVidPreview(){ var pv=document.getElementById('se-vid-preview'); if(!pv) return; var u=(document.getElementById('se-vid-url')||{}).value||settings.induction_video_url||''; pv.innerHTML=u?('<video src="'+esc(u)+'" controls style="width:100%;max-width:360px;border-radius:10px;margin-top:8px;background:#000;"></video>'):'<div class="muted" style="font-size:12.5px;margin-top:6px;">No induction video yet.</div>'; }
 document.getElementById('se-save').addEventListener('click', async function(){
-  var patch={ company_id:company.id, induction_text:document.getElementById('se-induction').value, emergency_text:document.getElementById('se-emergency').value, require_induction:document.getElementById('se-ind').checked, require_vehicle:document.getElementById('se-veh').checked, kiosk_token:settings.kiosk_token||null, decl_truth:document.getElementById('se-decl-truth').value, decl_gdpr:document.getElementById('se-decl-gdpr').value, induction_video_url:(document.getElementById('se-vid-url').value||'').trim(), updated_at:new Date().toISOString() };
+  var patch={ company_id:company.id, induction_text:document.getElementById('se-induction').value, emergency_text:document.getElementById('se-emergency').value, require_induction:document.getElementById('se-ind').checked, require_vehicle:document.getElementById('se-veh').checked, kiosk_token:settings.kiosk_token||null, decl_truth:document.getElementById('se-decl-truth').value, decl_gdpr:document.getElementById('se-decl-gdpr').value, induction_video_url:(document.getElementById('se-vid-url').value||'').trim(), induction_questions:readIQEditor(), updated_at:new Date().toISOString() };
   var r=await sb.from('visit_settings').upsert(patch,{onConflict:'company_id'}); if(r.error){ toast('Admins only.'); return; }
-  settings.induction_text=patch.induction_text; settings.emergency_text=patch.emergency_text; settings.require_induction=patch.require_induction; settings.require_vehicle=patch.require_vehicle; settings.decl_truth=patch.decl_truth; settings.decl_gdpr=patch.decl_gdpr; settings.induction_video_url=patch.induction_video_url; toast('Settings saved.');
+  settings.induction_text=patch.induction_text; settings.emergency_text=patch.emergency_text; settings.require_induction=patch.require_induction; settings.require_vehicle=patch.require_vehicle; settings.decl_truth=patch.decl_truth; settings.decl_gdpr=patch.decl_gdpr; settings.induction_video_url=patch.induction_video_url; settings.induction_questions=(patch.induction_questions&&patch.induction_questions.length?patch.induction_questions:null); toast('Settings saved.');
 });
 (function(){
   var up=document.getElementById('se-vid-upload'); var url=document.getElementById('se-vid-url');
@@ -1243,9 +1271,10 @@ function showInductionVideo(){
 }
 function renderQuiz(){
   var box=document.getElementById('k-ind-quiz'); if(!box) return;
-  box.innerHTML='<div class="pcard" style="margin-top:0;"><div class="ph">📝 Induction questions</div>'+INDUCTION_QUESTIONS.map(function(it,i){ return '<div class="q-item"><div style="font-weight:600;">'+(i+1)+'. '+esc(it.q)+'</div>'+it.opts.map(function(op,j){ return '<label class="qopt"><input type="radio" name="iq'+i+'" value="'+j+'"> '+esc(op)+'</label>'; }).join('')+'</div>'; }).join('')+'<button type="button" class="btn primary" id="k-quiz-submit" style="margin-top:10px;">Check answers</button><div id="k-quiz-msg" class="err" style="margin-top:6px;"></div></div>';
+  var Q=activeInductionQuestions();
+  box.innerHTML='<div class="pcard" style="margin-top:0;"><div class="ph">📝 Induction questions</div>'+Q.map(function(it,i){ return '<div class="q-item"><div style="font-weight:600;">'+(i+1)+'. '+esc(it.q)+'</div>'+it.opts.map(function(op,j){ return '<label class="qopt"><input type="radio" name="iq'+i+'" value="'+j+'"> '+esc(op)+'</label>'; }).join('')+'</div>'; }).join('')+'<button type="button" class="btn primary" id="k-quiz-submit" style="margin-top:10px;">Check answers</button><div id="k-quiz-msg" class="err" style="margin-top:6px;"></div></div>';
   document.getElementById('k-quiz-submit').addEventListener('click',function(){
-    var ok=true; INDUCTION_QUESTIONS.forEach(function(it,i){ var sel=document.querySelector('input[name="iq'+i+'"]:checked'); if(!sel||(+sel.value)!==it.correct) ok=false; });
+    var ok=true; Q.forEach(function(it,i){ var sel=document.querySelector('input[name="iq'+i+'"]:checked'); if(!sel||(+sel.value)!==it.correct) ok=false; });
     var m=document.getElementById('k-quiz-msg');
     if(ok){ _permitState.passed=true; m.style.color='var(--green)'; m.textContent='✓ Induction passed — you may continue.'; }
     else { _permitState.passed=false; m.style.color='var(--red)'; m.textContent='Some answers are incorrect — please review the video and try again.'; }
