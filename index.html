@@ -39,6 +39,8 @@
 #jtThemeBtn{position:fixed;z-index:9998;right:14px;bottom:14px;width:44px;height:44px;border-radius:50%;border:1px solid var(--line);background:var(--panel);color:var(--paper);font-size:18px;line-height:1;cursor:pointer;box-shadow:0 6px 20px rgba(0,0,0,.25);display:none;align-items:center;justify-content:center;}
 #jtThemeBtn:hover{border-color:var(--blue);}
 @media print{#jtThemeBtn{display:none!important;}}
+#jtThemeBtn{bottom:calc(14px + env(safe-area-inset-bottom));}
+body.kiosk-live #jtThemeBtn{display:none!important;}
 @media(max-width:900px){#jtThemeBtn{display:flex;}}
 </style>
 <script>(function(){
@@ -110,6 +112,7 @@ window.__sbLoad = (window.supabase) ? Promise.resolve(true) : new Promise(functi
   .hidden{display:none !important;}
   button,input,select,textarea{font-family:inherit;}
   input,select,textarea{width:100%;background:var(--panel);color:var(--paper);border:1px solid var(--line);border-radius:9px;padding:11px 12px;font-size:14.5px;outline:none;}
+  input[type=checkbox],input[type=radio]{width:18px;height:18px;min-width:18px;flex:none;padding:0;margin:0;accent-color:#2d6cdf;cursor:pointer;vertical-align:middle;}
   input:focus,select:focus,textarea:focus{border-color:var(--blue);box-shadow:0 0 0 3px var(--blue-soft);}
   label{display:block;font-size:11px;font-weight:600;color:var(--paper-dim);text-transform:uppercase;letter-spacing:.05em;margin:12px 0 5px;}
   .btn{display:inline-flex;align-items:center;justify-content:center;gap:8px;min-height:42px;padding:10px 18px;border-radius:9px;border:1px solid var(--line);background:var(--panel);color:var(--paper);font-size:14px;font-weight:600;cursor:pointer;transition:.15s;}
@@ -510,6 +513,14 @@ window.__sbLoad = (window.supabase) ? Promise.resolve(true) : new Promise(functi
           <button class="btn primary" id="se-save" style="margin-top:16px;">Save induction &amp; declarations</button>
         </div>
         <div class="card">
+          <div class="sec-h">Contractor permit checklists</div>
+          <div class="muted" style="font-size:12px;margin-bottom:8px;">Edit the checklist a contractor must complete for each work-permit type. Add or remove items. Leave a type untouched to keep the built-in defaults.</div>
+          <label>Permit type</label><select id="pc-type"></select>
+          <div id="pc-editor"></div>
+          <button class="btn" id="pc-add" type="button" style="margin-top:8px;">+ Add checklist item</button>
+          <button class="btn primary" id="pc-save" type="button" style="margin-top:12px;">Save checklist</button>
+        </div>
+        <div class="card">
           <div class="sec-h">Kiosk QR &amp; Sites</div>
           <button class="btn" id="open-kioskrules" type="button">🖥️ Kiosk QR code</button>
           <button class="btn" id="open-sites" type="button" style="margin-top:8px;">📍 Sites / locations</button>
@@ -593,7 +604,7 @@ var INDUCTION_QUESTIONS=[
 var sb=null; function initSb(){ if(sb) return true; try{ if(window.supabase && window.supabase.createClient){ sb=window.supabase.createClient(SUPABASE_URL, SUPABASE_ANON_KEY); return true; } }catch(e){ console.error('Supabase init failed',e); } return false; } initSb();
 var userEmail='', userName='', userRole='', isOwner=false, myId=null;
 var company={id:null,name:'',invite:'',email:''};
-var settings={induction_text:'',emergency_text:'',require_induction:false,require_vehicle:false,kiosk_token:'',decl_truth:'',decl_gdpr:'',induction_video_url:'',induction_questions:null};
+var settings={induction_text:'',emergency_text:'',require_induction:false,require_vehicle:false,kiosk_token:'',decl_truth:'',decl_gdpr:'',induction_video_url:'',induction_questions:null,permit_checklists:null};
 var sites=[], visits=[];
 var PURPOSES=['Contractor','Delivery','Customer','Visitor','Others'];
 var PERMIT_TYPES=['General Work','Hot Work','Working at Height','Confined Space','Electrical / Isolation (LOTO)','Excavation','Lifting Operation','Blasting (Quarry)'];
@@ -691,7 +702,7 @@ async function loadCompany(){
 }
 async function loadSettings(){
   try{ var r=await sb.from('visit_settings').select('*').limit(1).single();
-    if(r.data){ settings={induction_text:r.data.induction_text||'',emergency_text:r.data.emergency_text||'',require_induction:!!r.data.require_induction,require_vehicle:!!r.data.require_vehicle,kiosk_token:r.data.kiosk_token||'',decl_truth:r.data.decl_truth||'',decl_gdpr:r.data.decl_gdpr||'',induction_video_url:r.data.induction_video_url||'',induction_questions:(r.data.induction_questions&&r.data.induction_questions.length?r.data.induction_questions:null)}; }
+    if(r.data){ settings={induction_text:r.data.induction_text||'',emergency_text:r.data.emergency_text||'',require_induction:!!r.data.require_induction,require_vehicle:!!r.data.require_vehicle,kiosk_token:r.data.kiosk_token||'',decl_truth:r.data.decl_truth||'',decl_gdpr:r.data.decl_gdpr||'',induction_video_url:r.data.induction_video_url||'',induction_questions:(r.data.induction_questions&&r.data.induction_questions.length?r.data.induction_questions:null),permit_checklists:(r.data.permit_checklists&&Object.keys(r.data.permit_checklists).length?r.data.permit_checklists:null)}; }
   }catch(_){}
 }
 async function loadSites(){ try{ var r=await sb.from('visitor_sites').select('*').order('name'); sites=(!r.error&&r.data)?r.data:[]; }catch(_){ sites=[]; } }
@@ -778,7 +789,7 @@ function renderPermits(){
 
 function openPermitForm(){
   var t=WP_TYPES[0];
-  function typeQs(tp){ var qs=(WP_QUESTIONS[tp]||[]).concat(WP_COMMON); return qs.map(function(q,i){ return '<div class="permit-q"><div>'+esc(q)+'</div>'+wpYesNoNa('wpq_'+i)+'</div>'; }).join(''); }
+  function typeQs(tp){ var qs=checklistFor(tp); return qs.map(function(q,i){ return '<div class="permit-q"><div>'+esc(q)+'</div>'+wpYesNoNa('wpq_'+i)+'</div>'; }).join(''); }
   var html=''+
    '<label>Type of work permit *</label><select id="wp-type">'+WP_TYPES.map(function(x){return '<option'+(x===t?' selected':'')+'>'+esc(x)+'</option>';}).join('')+'</select>'+
    '<div class="grid2"><div><label>Applicant name *</label><input id="wp-name"></div><div><label>Applicant email *</label><input id="wp-email" type="email" placeholder="you@company.com"></div></div>'+
@@ -823,7 +834,7 @@ async function submitPermit(){
   if(!decl){ msg.textContent='Kailangan tanggapin ang truthfulness declaration.'; return; }
   if(!sign){ msg.textContent='Kailangan ng signature (buong pangalan).'; return; }
   var answers={}; document.querySelectorAll('#wp-qs .permit-q select').forEach(function(sel,i){ answers['q'+i]=sel.value; });
-  var qlabels=(WP_QUESTIONS[type]||[]).concat(WP_COMMON);
+  var qlabels=checklistFor(type);
   var ans2={}; qlabels.forEach(function(q,i){ ans2[q]=answers['q'+i]||''; });
   var ref='WP-'+ymd().replace(/-/g,'')+'-'+String((permits.length+1)).padStart(3,'0');
   var row={ company_id:company.id, ref:ref, permit_type:type, applicant_name:name, applicant_email:email,
@@ -1021,9 +1032,18 @@ function renderSettingsForm(){
   var dt=document.getElementById('se-decl-truth'); if(dt) dt.value=settings.decl_truth||DECL_TRUTH_DEFAULT;
   var dg=document.getElementById('se-decl-gdpr'); if(dg) dg.value=settings.decl_gdpr||DECL_GDPR_DEFAULT;
   var vu=document.getElementById('se-vid-url'); if(vu) vu.value=settings.induction_video_url||'';
-  renderVidPreview(); renderIQEditor();
+  renderVidPreview(); renderIQEditor(); if(typeof pcRender==='function') pcRender();
 }
 function activeInductionQuestions(){ var q=settings.induction_questions; return (q && q.length)? q : INDUCTION_QUESTIONS; }
+function checklistFor(type){ var pc=settings.permit_checklists; if(pc && pc[type] && pc[type].length) return pc[type].slice(); return (WP_QUESTIONS[type]||[]).concat(WP_COMMON); }
+function pcStash(t,arr){ if(!settings.permit_checklists) settings.permit_checklists={}; settings.permit_checklists[t]=arr; }
+function pcRender(){
+  var box=document.getElementById('pc-editor'); var sel=document.getElementById('pc-type'); if(!box||!sel) return;
+  if(!sel.options.length) sel.innerHTML=WP_TYPES.map(function(t){return '<option>'+esc(t)+'</option>';}).join('');
+  var t=sel.value||WP_TYPES[0]; var items=checklistFor(t);
+  box.innerHTML=items.map(function(q,i){ return '<div class="pc-row" style="display:grid;grid-template-columns:1fr 44px;gap:8px;align-items:center;margin-top:6px;"><input class="pc-item" value="'+esc(q)+'"><button type="button" class="btn sm pc-del" data-i="'+i+'" title="Remove" style="min-width:44px;">\u2715</button></div>'; }).join('');
+  box.querySelectorAll('.pc-del').forEach(function(b){ b.addEventListener('click',function(){ var idx=+b.getAttribute('data-i'); var arr=[]; box.querySelectorAll('.pc-item').forEach(function(r,j){ if(j!==idx) arr.push(r.value); }); pcStash(t,arr); pcRender(); }); });
+}
 function renderIQEditor(){
   var box=document.getElementById('se-iq-editor'); if(!box) return;
   var qs=(settings.induction_questions && settings.induction_questions.length)? settings.induction_questions : INDUCTION_QUESTIONS;
@@ -1110,6 +1130,17 @@ function compressVideo(file, onProgress){
     }catch(e){ toast('Could not process the video — try a shorter clip or paste a link.'); }
     up.disabled=false; up.textContent='⬆️ Upload video';
   });
+})();
+(function(){
+  var sel=document.getElementById('pc-type'); var add=document.getElementById('pc-add'); var save=document.getElementById('pc-save');
+  if(!sel) return;
+  if(!sel.options.length) sel.innerHTML=WP_TYPES.map(function(t){return '<option>'+esc(t)+'</option>';}).join('');
+  function curType(){ return (sel&&sel.value)||WP_TYPES[0]; }
+  function readRows(){ var box=document.getElementById('pc-editor'); var arr=[]; if(box) box.querySelectorAll('.pc-item').forEach(function(r){ arr.push(r.value); }); return arr; }
+  sel.addEventListener('change', pcRender);
+  if(add) add.addEventListener('click',function(){ var arr=readRows(); arr.push(''); pcStash(curType(),arr); pcRender(); var box=document.getElementById('pc-editor'); if(box){ var ins=box.querySelectorAll('.pc-item'); if(ins.length) ins[ins.length-1].focus(); } });
+  if(save) save.addEventListener('click', async function(){ var t=curType(); var arr=readRows().map(function(v){return (v||'').trim();}).filter(Boolean); pcStash(t,arr); var patch={ company_id:company.id, permit_checklists:settings.permit_checklists, updated_at:new Date().toISOString() }; save.disabled=true; var r=await sb.from('visit_settings').upsert(patch,{onConflict:'company_id'}); save.disabled=false; if(r.error){ toast('Admins only.'); return; } toast('Checklist saved for '+t+'.'); pcRender(); });
+  pcRender();
 })();
 function kioskUrl(){ return location.origin+location.pathname+'?k='+encodeURIComponent(settings.kiosk_token||''); }
 function renderQR(){
@@ -1217,12 +1248,20 @@ async function bootPublicKiosk(token){
   hide('loginOverlay'); applyBrand('');
   try{ var r=await sb.rpc('kiosk_info',{p_token:token}); if(r.data&&r.data.length){ KINFO=r.data[0]; } }catch(_){}
   if(!KINFO){ document.getElementById('kiosk').classList.add('open'); document.getElementById('kioskBody').innerHTML='<div class="empty">This sign-in link is invalid or has expired. Please ask reception for help.</div>'; document.getElementById('kioskExit').style.display='none'; return; }
+  company.name=KINFO.company_name||''; applyBrand(KINFO.logo_url||'');
+  settings.induction_text=KINFO.induction_text||''; settings.emergency_text=KINFO.emergency_text||'';
+  settings.require_induction=!!KINFO.require_induction; settings.require_vehicle=!!KINFO.require_vehicle;
+  settings.decl_truth=KINFO.decl_truth||''; settings.decl_gdpr=KINFO.decl_gdpr||'';
+  settings.induction_video_url=KINFO.induction_video_url||'';
+  settings.induction_questions=(KINFO.induction_questions&&KINFO.induction_questions.length?KINFO.induction_questions:null);
+  settings.permit_checklists=(KINFO.permit_checklists&&Object.keys(KINFO.permit_checklists).length?KINFO.permit_checklists:null);
+  document.body.classList.add('kiosk-live');
   document.getElementById('kioskCo').textContent='Welcome to '+(KINFO.company_name||'our site');
   document.getElementById('kioskExit').style.display='none';
   document.getElementById('kiosk').classList.add('open'); kioskHome();
 }
-function openKiosk(mode){ KMODE=mode||'admin'; KTOKEN=(mode==='public')?KTOKEN:(settings.kiosk_token||''); KINFO={company_name:company.name,induction_text:settings.induction_text,emergency_text:settings.emergency_text,require_induction:settings.require_induction,require_vehicle:settings.require_vehicle}; document.getElementById('kioskCo').textContent='Welcome to '+(company.name||'our site'); document.getElementById('kioskExit').style.display=''; document.getElementById('kiosk').classList.add('open'); kioskHome(); }
-document.getElementById('kioskExit').addEventListener('click',function(){ document.getElementById('kiosk').classList.remove('open'); });
+function openKiosk(mode){ KMODE=mode||'admin'; KTOKEN=(mode==='public')?KTOKEN:(settings.kiosk_token||''); KINFO={company_name:company.name,induction_text:settings.induction_text,emergency_text:settings.emergency_text,require_induction:settings.require_induction,require_vehicle:settings.require_vehicle}; document.getElementById('kioskCo').textContent='Welcome to '+(company.name||'our site'); document.getElementById('kioskExit').style.display=''; document.body.classList.add('kiosk-live'); document.getElementById('kiosk').classList.add('open'); kioskHome(); }
+document.getElementById('kioskExit').addEventListener('click',function(){ document.getElementById('kiosk').classList.remove('open'); document.body.classList.remove('kiosk-live'); });
 function kInfo(){ return KINFO||{}; }
 function kioskHome(){
   document.getElementById('kioskBody').innerHTML='<div style="text-align:center;margin-bottom:18px;"><div style="font-size:22px;font-weight:800;">Visitor Log System</div><div class="muted">Please select an option below to proceed</div></div><div class="bigchoice"><button class="btn green" id="k-in"><span class="e">➡️</span>Sign In</button><button class="btn red" id="k-out"><span class="e">⬅️</span>Sign Out</button></div>';
@@ -1239,7 +1278,7 @@ function kioskSignIn(){
     '<label>Purpose of visit</label><select id="k-purpose"><option value="">Select Purpose</option>'+PURPOSES.map(function(p){return '<option>'+p+'</option>';}).join('')+'</select>'+
     '<div id="k-maint"></div>'+
     '<label>Vehicle plate number'+(needVeh?' *':'')+'</label><input id="k-veh" placeholder="ABC 1234 / N/A">'+
-    '<label>Contact number</label><input id="k-phone" placeholder="0917XXXXXXX">'+
+    '<label>Contact number *</label><input id="k-phone" placeholder="0917XXXXXXX">'+
     (needInd?'<label>Site induction — please read</label><div class="induction-box">'+esc(info.induction_text)+((info.emergency_text||'').trim()?'\n\nEMERGENCY:\n'+esc(info.emergency_text):'')+'</div><label class="ack"><input type="checkbox" id="k-ack"> I have read and understood the site rules and emergency procedures.</label>':'')+
     '<div id="k-sigzone" style="margin-top:4px;"></div>'+
     '<div style="display:flex;gap:10px;margin-top:16px;"><button class="btn full" id="k-cancel">Cancel</button><button class="btn green full" id="k-submit">Submit Time In</button></div><div id="k-msg" class="err"></div>';
@@ -1271,23 +1310,24 @@ function wpContractorCard(){
     '<label>Applicant email *</label><input id="k-wemail" type="email" placeholder="you@company.com">'+
     '<label>Type of work permit *</label><select id="k-wtype">'+WP_TYPES.map(function(t){return '<option>'+esc(t)+'</option>';}).join('')+'</select>'+
     '<label>Description of work *</label><input id="k-wdesc" placeholder="e.g. replace conveyor bearing">'+
-    '<label>Exact location / area *</label><input id="k-wloc" placeholder="e.g. Primary crusher, Quarry face 2">'+
-    '<div class="g2"><div><label>Valid from — date</label><input type="date" id="k-wfromd"></div><div><label>Valid from — time</label><input type="time" id="k-wfromt"></div></div>'+
-    '<div class="g2"><div><label>Valid to — date</label><input type="date" id="k-wtod"></div><div><label>Valid to — time</label><input type="time" id="k-wtot"></div></div>'+
-    '<div class="g2"><div><label>No. of workers</label><input type="number" id="k-wpers" min="1" value="1"></div><div><label>Site supervisor</label><input id="k-wsup" placeholder="Name"></div></div>'+
+    '<label>Exact location / area *</label><input id="k-wloc" list="k-wloc-list" placeholder="Select or type a location">'+
+    '<datalist id="k-wloc-list"><option value="Pit"></option><option value="Main office"></option><option value="Bagging yard"></option><option value="Washplant"></option><option value="Small washplant"></option></datalist>'+
+    '<div class="g2"><div><label>Valid from — date *</label><input type="date" id="k-wfromd"></div><div><label>Time *</label><input type="time" id="k-wfromt"></div></div>'+
+    '<div class="g2"><div><label>Valid to — date *</label><input type="date" id="k-wtod"></div><div><label>Time *</label><input type="time" id="k-wtot"></div></div>'+
+    '<div class="g2"><div><label>No. of workers *</label><input type="number" id="k-wpers" min="1" value="1"></div><div><label>Contractor supervisor *</label><input id="k-wsup" placeholder="Name"></div></div>'+
     '<label>Permit checklist — tap ✓ / ✗ / N/A</label><div id="k-wprec"></div>'+
     '</div>';
 }
 function fillControls(){
   var el=document.getElementById('k-wprec'); if(!el) return;
-  var t=(document.getElementById('k-wtype')||{}).value||WP_TYPES[0]; var qs=(WP_QUESTIONS[t]||[]).concat(WP_COMMON);
+  var t=(document.getElementById('k-wtype')||{}).value||WP_TYPES[0]; var qs=checklistFor(t);
   el.innerHTML=qs.map(function(q,i){ return '<div class="qrow"><div>'+esc(q)+'</div>'+triHTML('q'+i)+'</div>'; }).join('');
   wireTri(el);
 }
 function wpInductionCard(){
   return '<div class="pcard"><div class="ph">🦺 Safety induction</div>'+
     '<label>Has EVERYONE who will work completed the safety induction? *</label>'+
-    '<div class="tri" data-tri="__ind" id="k-ind-tri" style="margin-top:2px;"><button type="button" class="tb ok" data-v="Yes" style="width:auto;padding:8px 18px;">Yes</button><button type="button" class="tb no" data-v="No" style="width:auto;padding:8px 18px;">No</button></div>'+
+    '<div class="tri" data-tri="__ind" id="k-ind-tri" style="margin-top:2px;flex-wrap:wrap;"><button type="button" class="tb ok" data-v="Yes" style="width:auto;padding:8px 18px;">Yes</button><button type="button" class="tb no" data-v="No" style="width:auto;padding:8px 18px;">No</button><button type="button" class="tb na" data-v="N/A" style="width:auto;padding:8px 14px;">Not required</button></div>'+
     '<div id="k-ind-flow" style="margin-top:10px;"></div></div>';
 }
 function wpWireInduction(){
@@ -1296,6 +1336,7 @@ function wpWireInduction(){
 }
 function renderIndFlow(){
   var el=document.getElementById('k-ind-flow'); if(!el) return;
+  if(_permitState.ind==='N/A'){ el.innerHTML='<div class="declbox2" style="margin-top:6px;">I confirm that I will <b>NOT</b> enter the operational site or carry out any work. I am only visiting the office / reception and will remain in visitor areas at all times.</div>'; return; }
   if(_permitState.ind!=='No'){ el.innerHTML=''; return; }
   el.innerHTML='<div class="warnbox">Everyone must complete the safety induction before working. Choose one:</div>'+
     '<button type="button" class="opt-btn" id="k-ind-office">🏢 Go to the safety office for induction</button>'+
@@ -1368,16 +1409,15 @@ async function kioskSubmit(){
   var ackEl=document.getElementById('k-ack'); if(ackEl && !ackEl.checked){ return fail('Please confirm you read the site rules.'); }
   var purpose=document.getElementById('k-purpose').value||'';
   if(!purpose){ return fail('Please select the purpose of visit.'); }
-  if(_permitState.ind!=='Yes'){
-    if(_permitState.ind!=='No'){ return fail('Please answer the safety induction question.'); }
-    if(_permitState.mode!=='office' && !_permitState.passed){ return fail('Complete the induction video and questions, or choose the safety office.'); }
-  }
+  var phoneEl=document.getElementById('k-phone'); if(phoneEl && !phoneEl.value.trim()){ return fail('Please enter your contact number.'); }
+  if(_permitState.ind===''){ return fail('Please answer the safety induction question.'); }
+  if(_permitState.ind==='No' && _permitState.mode!=='office' && !_permitState.passed){ return fail('Complete the induction video and questions, or choose the safety office.'); }
   var dT=document.getElementById('k-decl-truth'), dG=document.getElementById('k-decl-gdpr');
   if(!dT||!dT.checked){ return fail('Please accept the truthfulness declaration.'); }
   if(!dG||!dG.checked){ return fail('Please accept the data protection (GDPR) declaration.'); }
   if(!_permitState.sig){ return fail('Please sign in the signature box.'); }
   var inductionDone=(_permitState.ind==='Yes')||(_permitState.passed===true);
-  var details={ signature:_permitState.sig, induction_done:inductionDone, induction_mode:(_permitState.ind==='Yes'?'prior':(_permitState.mode||'')), gdpr_ack:true, truth_ack:true }, permitPayload=null;
+  var details={ signature:_permitState.sig, induction_done:inductionDone, induction_mode:(_permitState.ind==='Yes'?'prior':(_permitState.ind==='N/A'?'not_required':(_permitState.mode||''))), gdpr_ack:true, truth_ack:true }, permitPayload=null;
   if(purpose==='Contractor'){
     var wemail=(document.getElementById('k-wemail')||{}).value||'';
     var desc=(document.getElementById('k-wdesc')||{}).value||'', loc=(document.getElementById('k-wloc')||{}).value||'';
@@ -1385,8 +1425,15 @@ async function kioskSubmit(){
     if(!/^[^@\s]+@[^@\s]+\.[^@\s]+$/.test(wemail)){ return fail('Enter a valid applicant email.'); }
     if(!desc.trim()){ return fail('Describe the contractor work.'); }
     if(!loc.trim()){ return fail('Enter the work location.'); }
-    var qlabels=(WP_QUESTIONS[wtype]||[]).concat(WP_COMMON); var wans={};
-    qlabels.forEach(function(q,i){ wans[q]=_permitState.tri['q'+i]||''; });
+    var fromd=(document.getElementById('k-wfromd')||{}).value||'', fromt=(document.getElementById('k-wfromt')||{}).value||'';
+    var tod=(document.getElementById('k-wtod')||{}).value||'', tot=(document.getElementById('k-wtot')||{}).value||'';
+    if(!fromd||!fromt){ return fail('Enter the valid-from date and time.'); }
+    if(!tod||!tot){ return fail('Enter the valid-to date and time.'); }
+    var wsup=(document.getElementById('k-wsup')||{}).value||''; if(!wsup.trim()){ return fail('Enter the contractor supervisor name.'); }
+    var vehEl=document.getElementById('k-veh'); if(!vehEl||!vehEl.value.trim()){ return fail('Vehicle plate number is required for the work permit.'); }
+    var qlabels=checklistFor(wtype); var wans={}; var missingQ=false;
+    qlabels.forEach(function(q,i){ var a=_permitState.tri['q'+i]||''; if(!a) missingQ=true; wans[q]=a; });
+    if(missingQ){ return fail('Please answer every item in the permit checklist \u2014 tap \u2713, \u2717 or N/A.'); }
     permitPayload={ ref:'WP-'+ymd().replace(/-/g,'')+'-'+String(((permits||[]).length+1)).padStart(3,'0'), permit_type:wtype,
       applicant_name:name, applicant_email:wemail, site:loc, work_description:desc,
       num_workers:parseInt((document.getElementById('k-wpers')||{}).value,10)||null,
