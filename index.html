@@ -499,9 +499,9 @@ window.__sbLoad = (window.supabase) ? Promise.resolve(true) : new Promise(functi
           <div class="muted" style="font-size:11.5px;margin-top:4px;">Tip: use {company} to auto-insert your company name.</div>
           <hr style="border:none;border-top:1px solid var(--line);margin:16px 0;">
           <div class="sec-h">Safety induction video</div>
-          <div class="muted" style="font-size:12.5px;margin-bottom:8px;">Shown when a visitor answers they have <b>not</b> completed the induction. <b>Easiest for long videos:</b> upload it to YouTube (unlisted) and paste the link below — any length, plays on every phone, seek bar is locked. Or upload a short MP4. Then press <b>Save</b>.</div>
+          <div class="muted" style="font-size:12.5px;margin-bottom:8px;">Shown when a visitor answers they have <b>not</b> completed the induction. Upload an MP4 (kept on your own EU server — GDPR-safe). <b>Max 50 MB.</b> For a long video, compress it first with <b>HandBrake</b> (free) to bring it under 50 MB, then upload here. Then press <b>Save</b>.</div>
           <div style="display:flex;gap:8px;align-items:center;flex-wrap:wrap;"><input type="file" id="se-vid-file" accept="video/*" style="flex:1;min-width:170px;"><button class="btn" id="se-vid-upload" type="button">⬆️ Upload video</button></div>
-          <label>YouTube link (recommended) or MP4 link</label><input id="se-vid-url" placeholder="https://youtu.be/…  or  https://…/induction.mp4">
+          <label>MP4 link (or paste a direct video URL)</label><input id="se-vid-url" placeholder="https://…/induction.mp4">
           <div id="se-vid-preview"></div>
           <hr style="border:none;border-top:1px solid var(--line);margin:16px 0;">
           <div class="sec-h">Induction video questions (5)</div>
@@ -1091,14 +1091,17 @@ function compressVideo(file, onProgress){
     var f=document.getElementById('se-vid-file'); if(!f||!f.files||!f.files[0]){ toast('Choose a video file first.'); return; }
     var file=f.files[0];
     up.disabled=true;
+    var CAP=50*1024*1024; // Supabase free-tier per-file limit
     try{
       var blob=file, ext=(file.name.split('.').pop()||'mp4').toLowerCase(), ctype=file.type||'video/mp4';
-      if(file.size>15*1024*1024 && canCompressVideo()){
+      // Only re-compress when the file is actually over the storage cap. A file already
+      // under the cap (e.g. a HandBrake-compressed clip) uploads directly, as-is.
+      if(file.size>CAP && canCompressVideo()){
         up.textContent='Compressing 0%…';
         var res=await compressVideo(file, function(p){ up.textContent='Compressing '+Math.round(p*100)+'%… (about the video length)'; });
         if(res && res.blob && res.blob.size>0 && res.blob.size<file.size){ blob=res.blob; ext=res.ext; ctype=res.type; }
       }
-      if(blob.size>480*1024*1024){ toast('Video is still too large. Please use a shorter clip or paste a link.'); up.disabled=false; up.textContent='⬆️ Upload video'; return; }
+      if(blob.size>CAP){ toast('Video is '+Math.round(blob.size/1048576)+' MB — over the 50 MB limit. Compress it a bit more (HandBrake) or paste a link.'); up.disabled=false; up.textContent='⬆️ Upload video'; return; }
       up.textContent='Uploading…';
       var path=(company.id||'co')+'/induction-'+genCode(6)+'.'+ext;
       var r=await sb.storage.from('induction').upload(path, blob, {upsert:true, contentType:ctype});
