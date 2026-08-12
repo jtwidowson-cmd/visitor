@@ -1083,7 +1083,10 @@ function renderSettingsForm(){
   renderVidPreview(); renderIQEditor(); if(typeof pcRender==='function') pcRender();
 }
 function activeInductionQuestions(){ var q=settings.induction_questions; return (q && q.length)? q : INDUCTION_QUESTIONS; }
-function showAttendeeCapture(){ var z=document.getElementById('k-ind-att-zone'); if(!z) return; if(document.getElementById('k-ind-att')) return; z.innerHTML='<label>Names of everyone who completed the induction *</label><textarea id="k-ind-att" rows="3" placeholder="One name per line"></textarea><div class="muted" style="font-size:11.5px;">List each person who attended / watched the induction.</div>'; }
+function showAttendeeCapture(){ var z=document.getElementById('k-ind-att-zone'); if(!z) return; if(document.getElementById('k-att-list')) return;
+  z.innerHTML='<label>Names of everyone who completed the induction *</label><div id="k-att-list"></div><button type="button" class="btn sm" id="k-att-add" style="margin-top:6px;">＋ Add Personnel</button><div class="muted" style="font-size:11.5px;margin-top:4px;">Add each person who attended / watched the induction.</div>';
+  function attRow(){ var row=document.createElement('div'); row.className='att-row'; row.style.cssText='display:flex;gap:6px;margin-bottom:6px;'; row.innerHTML='<input class="k-att-name" placeholder="Full name" style="flex:1;"><button type="button" class="btn sm k-att-del" style="border-color:var(--red);color:var(--red);">✕</button>'; document.getElementById('k-att-list').appendChild(row); row.querySelector('.k-att-del').addEventListener('click',function(){ var list=document.getElementById('k-att-list'); if(list.querySelectorAll('.att-row').length>1){ row.remove(); } else { row.querySelector('.k-att-name').value=''; } }); }
+  attRow(); document.getElementById('k-att-add').addEventListener('click',attRow); }
 function checklistFor(type){ var pc=settings.permit_checklists; if(pc && pc[type] && pc[type].length) return pc[type].slice(); return (WP_QUESTIONS[type]||[]).concat(WP_COMMON); }
 function pcStash(t,arr){ if(!settings.permit_checklists) settings.permit_checklists={}; settings.permit_checklists[t]=arr; }
 function pcRender(){
@@ -1351,6 +1354,10 @@ function kioskSignIn(){
   document.getElementById('k-submit').addEventListener('click',kioskSubmit);
 }
 var _permitState={ind:'',mode:'',passed:false,tri:{},sig:null};
+var _visitType='';
+var INSPECTION_REMINDERS=['I will wear FULL PPE at all times on site','I am aware of the site speed limit — 20 km/h','My vehicle has a flashing safety beacon; if none, I will use a hazard light','I will be accompanied at all times during the visit','I will sign out after my visit'];
+function wpVisitorTypeCard(){ return '<div class="pcard"><div class="ph">🧭 Type of visit</div><label>What are you here for? *</label><select id="k-vtype"><option value="">Select…</option><option>Meeting</option><option>Inspection</option></select><div id="k-vinsp" style="margin-top:8px;"></div></div>'; }
+function renderVisitInspection(){ var sel=document.getElementById('k-vtype'); _visitType=sel?sel.value:''; var el=document.getElementById('k-vinsp'); if(!el) return; if(_visitType!=='Inspection'){ el.innerHTML=''; return; } el.innerHTML='<div class="warnbox" style="margin-bottom:6px;">Inspection visit — please confirm each safety reminder:</div>'+INSPECTION_REMINDERS.map(function(it,i){ return '<label class="ack" style="display:flex;gap:8px;align-items:flex-start;margin:4px 0;"><input type="checkbox" class="k-insp-ack" data-i="'+i+'"> <span>'+esc(it)+'</span></label>'; }).join(''); }
 function speak(t){ try{ if('speechSynthesis' in window && t){ window.speechSynthesis.cancel(); var u=new SpeechSynthesisUtterance(String(t)); u.rate=1; u.pitch=1; u.lang='en-GB'; window.speechSynthesis.speak(u); } }catch(_){}}
 function triHTML(key){ return '<div class="tri" data-tri="'+key+'"><button type="button" class="tb ok" data-v="Yes">✓</button><button type="button" class="tb no" data-v="No">✗</button><button type="button" class="tb na" data-v="N/A">N/A</button></div>'; }
 function wireTri(root){ if(!root) return; root.querySelectorAll('.tri').forEach(function(tr){ tr.querySelectorAll('.tb').forEach(function(b){ b.addEventListener('click',function(){ tr.querySelectorAll('.tb').forEach(function(x){x.classList.remove('on');}); b.classList.add('on'); _permitState.tri[tr.getAttribute('data-tri')]=b.getAttribute('data-v'); }); }); }); }
@@ -1359,13 +1366,15 @@ function renderPermit(){
   document.getElementById('k-submit').textContent=(p==='Contractor')?'Submit permit & Time In':'Submit Time In';
   var sz=document.getElementById('k-sigzone');
   if(!p){ box.innerHTML=''; if(sz) sz.innerHTML=''; return; }
-  _permitState={ind:'',mode:'',passed:false,tri:{},sig:null};
+  _permitState={ind:'',mode:'',passed:false,tri:{},sig:null}; _visitType='';
   var html='';
   if(p==='Contractor') html+=wpContractorCard();
+  if(p==='Visitor') html+=wpVisitorTypeCard();
   html+=wpInductionCard()+wpDeclCard();
   box.innerHTML=html;
   if(sz) sz.innerHTML=wpSignCard();
   if(p==='Contractor'){ fillControls(); var ts=document.getElementById('k-wtype'); if(ts) ts.addEventListener('change',fillControls); }
+  if(p==='Visitor'){ var vt=document.getElementById('k-vtype'); if(vt) vt.addEventListener('change',renderVisitInspection); }
   wpWireInduction(); wpInitSig();
 }
 function wpContractorCard(){
@@ -1425,11 +1434,14 @@ function showInductionVideo(){
                onStateChange:function(e){ if(e.data===0){ renderQuiz(); } } } }); }catch(_){ panel.innerHTML='<div class="warnbox">Could not load the video. Please choose “Go to the safety office”.</div>'; } });
     return;
   }
-  panel.innerHTML='<div class="vid-wrap"><video id="k-indvid" src="'+esc(url)+'" playsinline controlsList="nodownload noplaybackrate" controls></video></div>'+note;
-  var v=document.getElementById('k-indvid'); var maxT=0;
-  v.addEventListener('timeupdate',function(){ if(v.currentTime>maxT) maxT=v.currentTime; });
-  v.addEventListener('seeking',function(){ if(v.currentTime>maxT+0.6){ v.currentTime=maxT; } });
-  v.addEventListener('ended',function(){ renderQuiz(); });
+  panel.innerHTML='<div class="vid-wrap"><video id="k-indvid" src="'+esc(url)+'" playsinline preload="auto" controlsList="nodownload noplaybackrate noremoteplayback" disablepictureinpicture></video></div><div style="display:flex;gap:10px;align-items:center;margin-top:8px;"><button type="button" class="btn primary" id="k-vid-toggle">▶ Play induction video</button><span id="k-vid-time" class="muted" style="font-size:12px;"></span></div>'+note;
+  var v=document.getElementById('k-indvid'); var maxT=0; var tg=document.getElementById('k-vid-toggle'); var tl=document.getElementById('k-vid-time');
+  function fmtT(s){ s=Math.max(0,Math.floor(s||0)); var m=Math.floor(s/60), ss=s%60; return m+':'+(ss<10?'0':'')+ss; }
+  tg.addEventListener('click',function(){ if(v.paused){ var pr=v.play(); if(pr&&pr.catch) pr.catch(function(){}); tg.textContent='⏸ Pause'; } else { v.pause(); tg.textContent='▶ Play induction video'; } });
+  v.addEventListener('timeupdate',function(){ if(!v.seeking && v.currentTime>maxT) maxT=v.currentTime; if(tl&&v.duration) tl.textContent=fmtT(v.currentTime)+' / '+fmtT(v.duration); });
+  v.addEventListener('seeking',function(){ if(v.currentTime>maxT+0.5){ v.currentTime=maxT; } });
+  v.addEventListener('ratechange',function(){ if(v.playbackRate!==1) v.playbackRate=1; });
+  v.addEventListener('ended',function(){ if(tg) tg.style.display='none'; renderQuiz(); });
 }
 function renderQuiz(){
   var box=document.getElementById('k-ind-quiz'); if(!box) return;
@@ -1473,17 +1485,19 @@ async function kioskSubmit(){
   var ackEl=document.getElementById('k-ack'); if(ackEl && !ackEl.checked){ return fail('Please confirm you read the site rules.'); }
   var purpose=document.getElementById('k-purpose').value||'';
   if(!purpose){ return fail('Please select the purpose of visit.'); }
+  if(purpose==='Visitor'){ if(!_visitType){ return fail('Please select the type of visit (Meeting or Inspection).'); } if(_visitType==='Inspection'){ var _iack=document.querySelectorAll('.k-insp-ack'); var _allI=(_iack.length>0); _iack.forEach(function(c){ if(!c.checked) _allI=false; }); if(!_allI){ return fail('Please confirm all inspection safety reminders.'); } } }
+  var loggedPurpose=(purpose==='Visitor' && _visitType)?_visitType:purpose;
   var phoneEl=document.getElementById('k-phone'); if(phoneEl && !phoneEl.value.trim()){ return fail('Please enter your contact number.'); }
   if(_permitState.ind===''){ return fail('Please answer the safety induction question.'); }
   if(_permitState.ind==='No' && _permitState.mode!=='office' && !_permitState.passed){ return fail('Complete the induction video and questions, or choose the safety office.'); }
-  var attendees=[]; var attEl=document.getElementById('k-ind-att'); if(attEl){ attendees=attEl.value.split(/\n|,/).map(function(x){return x.trim();}).filter(Boolean); }
+  var attendees=[]; var attInputs=document.querySelectorAll('#k-att-list .k-att-name'); if(attInputs.length){ attInputs.forEach(function(el){ var vv=(el.value||'').trim(); if(vv) attendees.push(vv); }); } else { var attEl=document.getElementById('k-ind-att'); if(attEl){ attendees=attEl.value.split(/\n|,/).map(function(x){return x.trim();}).filter(Boolean); } }
   if(_permitState.ind==='No' && !attendees.length){ return fail('Please enter the name(s) of everyone who completed the induction.'); }
   var dT=document.getElementById('k-decl-truth'), dG=document.getElementById('k-decl-gdpr');
   if(!dT||!dT.checked){ return fail('Please accept the truthfulness declaration.'); }
   if(!dG||!dG.checked){ return fail('Please accept the data protection (GDPR) declaration.'); }
   if(!_permitState.sig){ return fail('Please sign in the signature box.'); }
   var inductionDone=(_permitState.ind==='Yes')||(_permitState.passed===true);
-  var details={ signature:_permitState.sig, induction_done:inductionDone, induction_mode:(_permitState.ind==='Yes'?'prior':(_permitState.ind==='N/A'?'not_required':(_permitState.mode||''))), gdpr_ack:true, truth_ack:true, attendees:attendees }, permitPayload=null;
+  var details={ signature:_permitState.sig, induction_done:inductionDone, induction_mode:(_permitState.ind==='Yes'?'prior':(_permitState.ind==='N/A'?'not_required':(_permitState.mode||''))), gdpr_ack:true, truth_ack:true, attendees:attendees, visit_type:(_visitType||''), inspection_ack:(_visitType==='Inspection') }, permitPayload=null;
   if(purpose==='Contractor'){
     var wemail=(document.getElementById('k-wemail')||{}).value||'';
     var desc=(document.getElementById('k-wdesc')||{}).value||'', loc=(document.getElementById('k-wloc')||{}).value||'';
@@ -1514,11 +1528,11 @@ async function kioskSubmit(){
   var okDone=false;
   try{
     if(KMODE==='public'){
-      var r=await sb.rpc('kiosk_sign_in_v2',{p_token:KTOKEN,p_name:name2,p_company:comp,p_host:host,p_purpose:purpose,p_phone:phone,p_vehicle:veh,p_visitor_type:mapVisitorType(purpose),p_details:details,p_permit:permitPayload});
+      var r=await sb.rpc('kiosk_sign_in_v2',{p_token:KTOKEN,p_name:name2,p_company:comp,p_host:host,p_purpose:loggedPurpose,p_phone:phone,p_vehicle:veh,p_visitor_type:mapVisitorType(loggedPurpose),p_details:details,p_permit:permitPayload});
       okDone=!!(r.data && r.data.ok);
       /* approval email sent automatically by DB trigger */
     } else {
-      var ins=await sb.from('visits').insert({company_id:company.id,visitor_name:name2,visitor_company:comp,host:host,purpose:purpose,phone:phone,vehicle_reg:veh,details:details,visitor_type:mapVisitorType(purpose),induction_ack:inductionDone,signature:(_permitState.sig||null),status:'on_site',signed_in_at:new Date().toISOString(),created_by:myId}).select('id').single();
+      var ins=await sb.from('visits').insert({company_id:company.id,visitor_name:name2,visitor_company:comp,host:host,purpose:loggedPurpose,phone:phone,vehicle_reg:veh,details:details,visitor_type:mapVisitorType(loggedPurpose),induction_ack:inductionDone,signature:(_permitState.sig||null),status:'on_site',signed_in_at:new Date().toISOString(),created_by:myId}).select('id').single();
       okDone=!ins.error; var vid=ins.data?ins.data.id:null;
       if(okDone && permitPayload && vid){ permitPayload.company_id=company.id; permitPayload.visit_id=vid; await sb.from('contractor_permits').insert(permitPayload); /* approval email sent automatically by DB trigger */ }
       if(okDone){ await loadVisits(); await loadPermits(); renderAll(); }
