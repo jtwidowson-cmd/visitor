@@ -470,11 +470,17 @@ window.__sbLoad = (window.supabase) ? Promise.resolve(true) : new Promise(functi
       <section class="view" id="v-company">
         <div class="card">
           <div class="sec-h">Permit approval workflow</div>
-          <div class="muted" style="font-size:13px;margin-bottom:8px;">Set who approves and who verifies work permits. The applicant enters their own email on each permit.</div>
-          <div class="grid2">
-            <div><label>Permit Approver email</label><input id="cs-approver" type="email" placeholder="approver@company.com"></div>
-            <div><label>Permit Verifier email</label><input id="cs-verifier" type="email" placeholder="verifier@company.com"></div>
+          <div class="muted" style="font-size:13px;margin-bottom:8px;">Add up to 6 approver emails. When a permit is submitted, all of them get an email and can Approve or Reject straight from it — the first decision is final. The applicant enters their own email on each permit.</div>
+          <label>Permit Approver emails (up to 6)</label>
+          <div id="cs-approvers" class="grid2">
+            <input id="cs-approver-0" type="email" placeholder="approver1@company.com">
+            <input id="cs-approver-1" type="email" placeholder="approver2@company.com">
+            <input id="cs-approver-2" type="email" placeholder="approver3@company.com">
+            <input id="cs-approver-3" type="email" placeholder="approver4@company.com">
+            <input id="cs-approver-4" type="email" placeholder="approver5@company.com">
+            <input id="cs-approver-5" type="email" placeholder="approver6@company.com">
           </div>
+          <div style="margin-top:10px;max-width:340px;"><label>Permit Verifier email (notified on approval)</label><input id="cs-verifier" type="email" placeholder="verifier@company.com"></div>
           <button class="btn primary" id="cs-permit-save" style="margin-top:12px;">Save permit workflow</button>
           <div id="cs-permit-msg" class="ok"></div>
         </div>
@@ -698,8 +704,8 @@ function paintUser(){
 
 /* ---------------- data ---------------- */
 async function loadCompany(){
-  try{ var r=await sb.from('companies').select('id,name,invite_code,reminder_email,logo_url,permit_approver_email,permit_verifier_email,dashboard_photos').limit(1).single();
-    if(r.data){ company={id:r.data.id,name:r.data.name||'',invite:r.data.invite_code||'',email:r.data.reminder_email||'',approver:r.data.permit_approver_email||'',verifier:r.data.permit_verifier_email||'',photos:(r.data.dashboard_photos||[])}; if(r.data.logo_url) applyBrand(r.data.logo_url); }
+  try{ var r=await sb.from('companies').select('id,name,invite_code,reminder_email,logo_url,permit_approver_email,permit_approver_emails,permit_verifier_email,dashboard_photos').limit(1).single();
+    if(r.data){ var _aps=Array.isArray(r.data.permit_approver_emails)?r.data.permit_approver_emails.filter(Boolean):[]; if(!_aps.length && r.data.permit_approver_email) _aps=[r.data.permit_approver_email]; company={id:r.data.id,name:r.data.name||'',invite:r.data.invite_code||'',email:r.data.reminder_email||'',approver:(_aps[0]||''),approvers:_aps,verifier:r.data.permit_verifier_email||'',photos:(r.data.dashboard_photos||[])}; if(r.data.logo_url) applyBrand(r.data.logo_url); }
   }catch(_){}
 }
 async function loadSettings(){
@@ -846,7 +852,7 @@ async function submitPermit(){
     valid_to_date:document.getElementById('wp-tdate').value||null, valid_to_time:document.getElementById('wp-ttime').value||null,
     induction_done:true, beacon_light:(beacon==='Yes'), hazard_marshal:(beacon==='No'),
     answers:ans2, declaration_ack:true, signature:sign, status:'submitted',
-    approver_email:company.approver||'', verifier_email:company.verifier||'' };
+    approver_email:company.approver||'', approver_emails:(company.approvers&&company.approvers.length?company.approvers:(company.approver?[company.approver]:[])), verifier_email:company.verifier||'' };
   var btn=document.getElementById('wp-submit'); btn.disabled=true; btn.textContent='Submitting…';
   var r=await sb.from('contractor_permits').insert(row).select().single();
   if(r.error){ msg.textContent=r.error.message||'Could not submit.'; btn.disabled=false; btn.textContent='Submit permit'; return; }
@@ -1205,7 +1211,7 @@ document.getElementById('qrPrint').addEventListener('click',function(){
 });
 
 /* ---------------- company setup ---------------- */
-function renderCompany(){ document.getElementById('cu-name').value=company.name||''; document.getElementById('cu-email').value=company.email||''; document.getElementById('cu-invite').textContent=company.invite||'—'; var ca=document.getElementById('cs-approver'); if(ca) ca.value=company.approver||''; var cv=document.getElementById('cs-verifier'); if(cv) cv.value=company.verifier||''; renderCompanyUsers(); }
+function renderCompany(){ document.getElementById('cu-name').value=company.name||''; document.getElementById('cu-email').value=company.email||''; document.getElementById('cu-invite').textContent=company.invite||'—'; var _aps=(company.approvers&&company.approvers.length?company.approvers:(company.approver?[company.approver]:[])); for(var _i=0;_i<6;_i++){ var _el=document.getElementById('cs-approver-'+_i); if(_el) _el.value=_aps[_i]||''; } var cv=document.getElementById('cs-verifier'); if(cv) cv.value=company.verifier||''; renderCompanyUsers(); }
 document.getElementById('cu-save').addEventListener('click', async function(){ var r=await sb.from('companies').update({name:document.getElementById('cu-name').value.trim(),reminder_email:document.getElementById('cu-email').value.trim()}).eq('id',company.id); if(r.error){toast('Admins only.');return;} company.name=document.getElementById('cu-name').value.trim(); company.email=document.getElementById('cu-email').value.trim(); paintUser(); toast('Saved.'); });
 document.getElementById('cu-regen').addEventListener('click', async function(){ if(!confirm('Regenerate the invite code?'))return; var code=genCode(8); var r=await sb.from('companies').update({invite_code:code}).eq('id',company.id); if(r.error){toast('Admins only.');return;} company.invite=code; document.getElementById('cu-invite').textContent=code; toast('New invite code.'); });
 async function renderCompanyUsers(){
@@ -1253,7 +1259,7 @@ document.getElementById('accountBg').addEventListener('click',function(e){ if(e.
   on('permitViewClose','click',function(){ document.getElementById('permitViewBg').classList.remove('open'); });
   var pbg=document.getElementById('permitBg'); if(pbg) pbg.addEventListener('click',function(e){ if(e.target.id==='permitBg') pbg.classList.remove('open'); });
   var pvbg=document.getElementById('permitViewBg'); if(pvbg) pvbg.addEventListener('click',function(e){ if(e.target.id==='permitViewBg') pvbg.classList.remove('open'); });
-  on('cs-permit-save','click',async function(){ var msg=document.getElementById('cs-permit-msg'); var ap=(document.getElementById('cs-approver').value||'').trim(); var ve=(document.getElementById('cs-verifier').value||'').trim(); var r=await sb.from('companies').update({permit_approver_email:ap,permit_verifier_email:ve}).eq('id',company.id); if(r.error){ msg.style.color='var(--red)'; msg.textContent='Admins only.'; return; } company.approver=ap; company.verifier=ve; msg.style.color='var(--green)'; msg.textContent='Permit workflow saved.'; });
+  on('cs-permit-save','click',async function(){ var msg=document.getElementById('cs-permit-msg'); var aps=[]; for(var i=0;i<6;i++){ var el=document.getElementById('cs-approver-'+i); var v=el?(el.value||'').trim():''; if(v && aps.indexOf(v)<0) aps.push(v); } var ve=(document.getElementById('cs-verifier').value||'').trim(); var bad=aps.filter(function(x){ return !/^[^@\s]+@[^@\s]+\.[^@\s]+$/.test(x); }); if(bad.length){ msg.style.color='var(--red)'; msg.textContent='Check the approver emails — this one looks wrong: '+bad[0]; return; } var r=await sb.from('companies').update({permit_approver_emails:aps,permit_approver_email:(aps[0]||''),permit_verifier_email:ve}).eq('id',company.id); if(r.error){ msg.style.color='var(--red)'; msg.textContent='Admins only.'; return; } company.approvers=aps; company.approver=(aps[0]||''); company.verifier=ve; msg.style.color='var(--green)'; msg.textContent='Permit workflow saved — '+aps.length+' approver'+(aps.length===1?'':'s')+'.'; });
   on('wg-add','click',function(){ var f=document.getElementById('wg-file'); if(!f||!f.files||!f.files[0]){ toast('Choose a photo first.'); return; } var fr=new FileReader(); fr.onload=function(){ var photos=(company.photos||[]).slice(); photos.push(fr.result); saveWidgets(photos); f.value=''; }; fr.readAsDataURL(f.files[0]); });
   on('open-kioskrules','click',function(){ goView('settings'); });
   on('open-sites','click',function(){ goView('sites'); });
@@ -1500,7 +1506,7 @@ async function kioskSubmit(){
       valid_from_date:(document.getElementById('k-wfromd')||{}).value||null, valid_from_time:(document.getElementById('k-wfromt')||{}).value||null,
       valid_to_date:(document.getElementById('k-wtod')||{}).value||null, valid_to_time:(document.getElementById('k-wtot')||{}).value||null,
       induction_done:inductionDone, beacon_light:false, hazard_marshal:false, answers:wans,
-      declaration_ack:true, signature:_permitState.sig, approver_email:company.approver||'', verifier_email:company.verifier||'' };
+      declaration_ack:true, signature:_permitState.sig, approver_email:company.approver||'', approver_emails:(company.approvers&&company.approvers.length?company.approvers:(company.approver?[company.approver]:[])), verifier_email:company.verifier||'' };
     details.permit=true; details.work_permit_type=wtype;
   }
   var b=document.getElementById('k-submit'); b.disabled=true; b.textContent='Submitting…';
