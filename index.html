@@ -1087,7 +1087,7 @@ function printRecord(v, fp){
   function kv(k,val){ if(val===''||val==null) return ''; return '<tr><td class="k">'+esc(k)+'</td><td>'+esc(val)+'</td></tr>'; }
   var rows=kv('Name',v.visitor_name)+kv('Company / affiliation',v.visitor_company)+kv('Who they visited',v.host)+
     kv('Purpose',v.purpose)+kv('Status',(v.status==='on_site'?'On site':v.status==='expected'?'Expected':'Signed out'))+
-    kv('Vehicle plate',v.vehicle_reg)+kv('Contact',v.phone)+kv('Time in',fmtDT(v.signed_in_at))+
+    kv('Vehicle plate',v.vehicle_reg)+kv('Contact',v.phone)+kv('Email',dt.email)+kv('Time in',fmtDT(v.signed_in_at))+
     kv('Time out',v.signed_out_at?fmtDT(v.signed_out_at):'\u2014')+kv('Duration',dur(v.signed_in_at,v.signed_out_at));
   var att=(dt.attendees||[]);
   var ind=''; if(dt.induction_mode==='not_required'){ ind='Not required (office / visitor only)'; }
@@ -1140,6 +1140,7 @@ function openDetail(id){
   var html='<h3 style="margin-top:0;">'+esc(v.visitor_name)+'</h3><div class="muted" style="font-size:13px;margin-bottom:8px;">'+esc(v.visitor_company||'')+(v.host?' · visiting '+esc(v.host):'')+'</div>'+
     '<div class="grid2" style="font-size:13.5px;"><div><b>Purpose</b><br>'+esc(v.purpose||'—')+'</div><div><b>Status</b><br>'+statusPill(v)+'</div>'+
     '<div><b>Vehicle</b><br>'+esc(v.vehicle_reg||'—')+'</div><div><b>Contact</b><br>'+esc(v.phone||'—')+'</div>'+
+    '<div><b>Email</b><br>'+esc((v.details&&v.details.email)||'—')+'</div><div></div>'+
     '<div><b>Time in</b><br>'+fmtDT(v.signed_in_at)+'</div><div><b>Time out</b><br>'+(v.signed_out_at?fmtDT(v.signed_out_at):'—')+'</div>'+
     '<div><b>Duration</b><br>'+dur(v.signed_in_at,v.signed_out_at)+'</div></div>'+indDetail(v)+permit+declSigBlock(v,fp)+
     '<div style="display:flex;gap:8px;margin-top:16px;justify-content:flex-end;flex-wrap:wrap;">'+(isAdminRole()?'<button class="btn sm" id="dm-del" type="button" style="border-color:var(--red);color:var(--red);margin-right:auto;">\ud83d\uddd1 Delete log</button>':'')+actions+'<button class="btn sm" id="dm-pdf" type="button">🖨️ Save as PDF</button>'+(v.status==='on_site'?'<button class="btn red sm" id="dm-out">Sign out</button>':'')+'<button class="btn sm" id="dm-close">Close</button></div>';
@@ -1488,6 +1489,8 @@ function kioskSignIn(){
     '<div id="k-maint"></div>'+
     '<label>Vehicle plate number'+(needVeh?' *':'')+'</label><input id="k-veh" placeholder="ABC 1234 / N/A">'+
     '<label>Contact number *</label><input id="k-phone" placeholder="0917XXXXXXX">'+
+    '<label>Email address *</label><input id="k-email" type="email" placeholder="you@email.com" autocomplete="email">'+
+    '<div class="muted" style="font-size:11.5px;margin-top:-2px;">We’ll email you a confirmation of your site access and safety induction.</div>'+
     (needInd?'<label>Site induction — please read</label><div class="induction-box">'+esc(info.induction_text)+((info.emergency_text||'').trim()?'\n\nEMERGENCY:\n'+esc(info.emergency_text):'')+'</div><label class="ack"><input type="checkbox" id="k-ack"> I have read and understood the site rules and emergency procedures.</label>':'')+
     '<div id="k-sigzone" style="margin-top:4px;"></div>'+
     '<div style="display:flex;gap:10px;margin-top:16px;"><button class="btn full" id="k-cancel">Cancel</button><button class="btn green full" id="k-submit">Submit Time In</button></div><div id="k-msg" class="err"></div>';
@@ -1599,9 +1602,16 @@ function renderQuiz(){
   var box=document.getElementById('k-ind-quiz'); if(!box) return;
   var Q=activeInductionQuestions();
   box.innerHTML='<div class="pcard" style="margin-top:0;"><div class="ph">📝 Induction questions</div>'+Q.map(function(it,i){ return '<div class="q-item"><div style="font-weight:600;">'+(i+1)+'. '+esc(it.q)+'</div>'+it.opts.map(function(op,j){ return '<label class="qopt"><input type="radio" name="iq'+i+'" value="'+j+'"> '+esc(op)+'</label>'; }).join('')+'</div>'; }).join('')+'<button type="button" class="btn primary" id="k-quiz-submit" style="margin-top:10px;">Check answers</button><div id="k-quiz-msg" class="err" style="margin-top:6px;"></div></div>';
-  document.getElementById('k-quiz-submit').addEventListener('click',function(){
-    var ok=true; Q.forEach(function(it,i){ var sel=document.querySelector('input[name="iq'+i+'"]:checked'); if(!sel||(+sel.value)!==it.correct) ok=false; });
-    var m=document.getElementById('k-quiz-msg');
+  document.getElementById('k-quiz-submit').addEventListener('click',async function(){
+    var btn=this; var m=document.getElementById('k-quiz-msg');
+    var answers=Q.map(function(it,i){ var sel=document.querySelector('input[name="iq'+i+'"]:checked'); return sel?(+sel.value):-1; });
+    if(answers.indexOf(-1)>=0){ m.style.color='var(--red)'; m.textContent='Please answer every question.'; return; }
+    // If the correct answers are present client-side (admin, or built-in default questions),
+    // check locally. If they were stripped from the payload (custom questions), verify server-side.
+    var hasClientCorrect = Q.every(function(it){ return typeof it.correct === 'number'; });
+    var ok=false;
+    if(hasClientCorrect){ ok = Q.every(function(it,i){ return answers[i]===it.correct; }); }
+    else { btn.disabled=true; try{ var r=await sb.rpc('kiosk_check_quiz',{p_token:KTOKEN,p_answers:answers}); ok=(r.data===true); }catch(_){ ok=false; } btn.disabled=false; }
     if(ok){ _permitState.passed=true; m.style.color='var(--green)'; m.textContent='✓ Induction passed — you may continue.'; showAttendeeCapture(); }
     else { _permitState.passed=false; m.style.color='var(--red)'; m.textContent='Some answers are incorrect — please review the video and try again.'; }
   });
@@ -1642,6 +1652,8 @@ async function kioskSubmit(){
   if(purpose==='Visitor'){ if(!_visitType){ return fail('Please select the type of visit (Meeting or Inspection).'); } if(_visitType==='Inspection' || _visitType==='Meeting'){ var _iack=document.querySelectorAll('.k-insp-ack'); var _allI=(_iack.length>0); _iack.forEach(function(c){ if(!c.checked) _allI=false; }); if(!_allI){ return fail('Please confirm all safety reminders.'); } } }
   var loggedPurpose=(purpose==='Visitor' && _visitType)?_visitType:purpose;
   var phoneEl=document.getElementById('k-phone'); if(phoneEl && !phoneEl.value.trim()){ return fail('Please enter your contact number.'); }
+  var emailEl=document.getElementById('k-email'); var vEmail=emailEl?emailEl.value.trim():'';
+  if(!/^[^@\s]+@[^@\s]+\.[^@\s]+$/.test(vEmail)){ return fail('Please enter a valid email address.'); }
   if(_permitState.ind===''){ return fail('Please answer the safety induction question.'); }
   if(_permitState.ind==='No' && _permitState.mode!=='office' && !_permitState.passed){ return fail('Complete the induction video and questions, or choose the safety office.'); }
   var attendees=[]; var attInputs=document.querySelectorAll('#k-att-list .k-att-name'); if(attInputs.length){ attInputs.forEach(function(el){ var vv=(el.value||'').trim(); if(vv) attendees.push(vv); }); } else { var attEl=document.getElementById('k-ind-att'); if(attEl){ attendees=attEl.value.split(/\n|,/).map(function(x){return x.trim();}).filter(Boolean); } }
@@ -1652,7 +1664,7 @@ async function kioskSubmit(){
   if(!dS||!dS.checked){ return fail('Please accept the safety reminder declaration.'); }
   if(!_permitState.sig){ return fail('Please sign in the signature box.'); }
   var inductionDone=(_permitState.ind==='Yes')||(_permitState.passed===true);
-  var details={ signature:_permitState.sig, induction_done:inductionDone, induction_mode:(_permitState.ind==='Yes'?'prior':(_permitState.ind==='N/A'?'not_required':(_permitState.mode||''))), gdpr_ack:true, truth_ack:true, attendees:attendees, visit_type:(_visitType||''), inspection_ack:(_visitType==='Inspection'||_visitType==='Meeting') }, permitPayload=null;
+  var details={ signature:_permitState.sig, induction_done:inductionDone, induction_mode:(_permitState.ind==='Yes'?'prior':(_permitState.ind==='N/A'?'not_required':(_permitState.mode||''))), gdpr_ack:true, truth_ack:true, attendees:attendees, visit_type:(_visitType||''), inspection_ack:(_visitType==='Inspection'||_visitType==='Meeting'), email:vEmail }, permitPayload=null;
   if(purpose==='Contractor'){
     var wemail=(document.getElementById('k-wemail')||{}).value||'';
     var desc=(document.getElementById('k-wdesc')||{}).value||'', loc=(document.getElementById('k-wloc')||{}).value||'';
@@ -1704,18 +1716,29 @@ async function kioskSubmit(){
   kioskDone('You are signed in', body);
 }
 async function kioskSignOutList(){
-  var list=[];
-  if(KMODE==='public'){ try{ var r=await sb.rpc('kiosk_on_site',{p_token:KTOKEN}); if(r.data) list=r.data; }catch(_){} }
-  else { list=visits.filter(function(v){return v.status==='on_site';}).map(function(v){return {id:v.id,visitor_name:v.visitor_name,visitor_company:v.visitor_company,signed_in_at:v.signed_in_at};}); }
-  document.getElementById('kioskBody').innerHTML='<div style="display:flex;align-items:center;gap:10px;margin-bottom:10px;"><button class="btn sm" id="k-back">←</button><div style="font-weight:800;font-size:18px;">Sign out — tap your name</div></div><input id="k-find" placeholder="Search your name…" style="margin-bottom:10px;"><div id="k-list">'+(list.length?list.map(function(v){return '<button class="btn full" style="justify-content:space-between;margin-bottom:8px;" data-so="'+v.id+'"><span>'+esc(v.visitor_name)+(v.visitor_company?' · '+esc(v.visitor_company):'')+'</span><span class="muted">in '+fmtT(v.signed_in_at)+'</span></button>';}).join(''):'<div class="empty">No one is signed in.</div>')+'</div>';
+  var pub=(KMODE==='public');
+  document.getElementById('kioskBody').innerHTML='<div style="display:flex;align-items:center;gap:10px;margin-bottom:10px;"><button class="btn sm" id="k-back">←</button><div style="font-weight:800;font-size:18px;">Sign out — find your name</div></div><input id="k-find" placeholder="Type your name to find your sign-in…" autocomplete="off"><div class="muted" style="font-size:12px;margin:6px 0 10px;">Type at least 2 letters of your name.</div><div id="k-list"></div>';
   document.getElementById('k-back').addEventListener('click',kioskHome);
-  var lst=document.getElementById('k-list');
-  lst.querySelectorAll('[data-so]').forEach(function(b){ b.addEventListener('click',async function(){ b.disabled=true; var ok=false;
-    if(KMODE==='public'){ try{ var r=await sb.rpc('kiosk_sign_out',{p_token:KTOKEN,p_visit:b.getAttribute('data-so')}); ok=(r.data===true); }catch(_){} }
+  var lst=document.getElementById('k-list'); var find=document.getElementById('k-find');
+  function rowHtml(v){ return '<button class="btn full" style="justify-content:space-between;margin-bottom:8px;" data-so="'+v.id+'"><span>'+esc(v.visitor_name)+(v.visitor_company?' · '+esc(v.visitor_company):'')+'</span><span class="muted">in '+fmtT(v.signed_in_at)+'</span></button>'; }
+  function wire(){ lst.querySelectorAll('[data-so]').forEach(function(b){ b.addEventListener('click',async function(){ b.disabled=true; var ok=false;
+    if(pub){ try{ var r=await sb.rpc('kiosk_sign_out',{p_token:KTOKEN,p_visit:b.getAttribute('data-so')}); ok=(r.data===true); }catch(_){} }
     else { var u=await sb.from('visits').update({status:'signed_out',signed_out_at:new Date().toISOString()}).eq('id',b.getAttribute('data-so')); ok=!u.error; if(ok){ await loadVisits(); renderAll(); } }
     if(ok) kioskDone('You are signed out','Thanks for visiting. Safe travels!'); else { b.disabled=false; toast('Could not sign out.'); }
-  }); });
-  document.getElementById('k-find').addEventListener('input',function(){ var q=this.value.toLowerCase(); lst.querySelectorAll('[data-so]').forEach(function(b){ b.style.display=b.textContent.toLowerCase().indexOf(q)>=0?'':'none'; }); });
+  }); }); }
+  var timer=null, seq=0;
+  async function doSearch(){
+    var q=(find.value||'').trim();
+    if(q.length<2){ lst.innerHTML='<div class="empty">Type your name to find your sign-in.</div>'; return; }
+    var mine=++seq; var rows=[];
+    if(pub){ try{ var r=await sb.rpc('kiosk_on_site',{p_token:KTOKEN,p_q:q}); if(r.data) rows=r.data; }catch(_){} }
+    else { var ql=q.toLowerCase(); rows=visits.filter(function(v){return v.status==='on_site' && (((v.visitor_name||'')+' '+(v.visitor_company||'')).toLowerCase().indexOf(ql)>=0);}).slice(0,25).map(function(v){return {id:v.id,visitor_name:v.visitor_name,visitor_company:v.visitor_company,signed_in_at:v.signed_in_at};}); }
+    if(mine!==seq) return; // ignore stale results
+    lst.innerHTML=rows.length?rows.map(rowHtml).join(''):'<div class="empty">No match found. Check the spelling or ask reception.</div>';
+    wire();
+  }
+  find.addEventListener('input',function(){ clearTimeout(timer); timer=setTimeout(doSearch,250); });
+  lst.innerHTML='<div class="empty">Type your name to find your sign-in.</div>';
 }
 function kioskDone(title,sub){ document.getElementById('kioskBody').innerHTML='<div style="text-align:center;padding:24px 0;"><div style="font-size:48px;">✅</div><div style="font-size:22px;font-weight:800;margin-top:8px;">'+esc(title)+'</div><div class="muted" style="margin-top:4px;">'+sub+'</div></div>'; setTimeout(kioskHome,3800); }
 
