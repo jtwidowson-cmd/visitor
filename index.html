@@ -387,6 +387,30 @@ window.__sbLoad = (window.supabase) ? Promise.resolve(true) : new Promise(functi
     h2,.topbar h2{font-size:16px;}
   }
   @media print{ .sidebar,.topbar,.icon-btn,#jtThemeBtn,.no-print{display:none !important;} .content{max-width:none;padding:0;} body{background:#fff;} }
+  /* ===== Read-only mode (officer / viewer): see everything, edit nothing ===== */
+  .ro-banner{display:none;}
+  body.vis-readonly #v-company input:not([type=file]),
+  body.vis-readonly #v-company select,
+  body.vis-readonly #v-company textarea,
+  body.vis-readonly #v-sites input, body.vis-readonly #v-sites select, body.vis-readonly #v-sites textarea,
+  body.vis-readonly #v-settings input, body.vis-readonly #v-settings select, body.vis-readonly #v-settings textarea{
+    pointer-events:none; opacity:.7; background:var(--panel-2)!important;
+  }
+  /* hide edit actions; keep read actions (Print QR, open sub-panels) */
+  body.vis-readonly #v-company .btn.primary,
+  body.vis-readonly #v-company .btn.green,
+  body.vis-readonly #v-company #cu-regen,
+  body.vis-readonly #v-company #wg-add,
+  body.vis-readonly #v-company #se-vid-upload,
+  body.vis-readonly #v-company #pc-add,
+  body.vis-readonly #v-company #al-create,
+  body.vis-readonly #v-company #al-gen,
+  body.vis-readonly #v-company [data-approve],
+  body.vis-readonly #v-company [data-del],
+  body.vis-readonly #v-sites .btn.primary,
+  body.vis-readonly #v-sites [data-delsite],
+  body.vis-readonly #v-sites #st-add,
+  body.vis-readonly #v-settings #qrRegen{ display:none !important; }
 </style>
 </head>
 <body>
@@ -948,7 +972,7 @@ async function submitPermit(){
 
 function openPermitView(id){
   var p=null; for(var i=0;i<permits.length;i++){ if(permits[i].id===id){p=permits[i];break;} } if(!p) return;
-  var canDecide=(userRole==='officer'||userRole==='admin');
+  var canDecide=canEditVisitor();
   function row(l,v){ return '<div style="font-size:13.5px;padding:3px 0;"><b>'+l+':</b> '+esc(v||'—')+'</div>'; }
   var ans=p.answers||{}; var ansHtml=Object.keys(ans).map(function(k){ return '<div class="permit-q"><div>'+esc(k)+'</div><div style="text-align:right;font-weight:700;">'+esc(ans[k]||'—')+'</div></div>'; }).join('');
   var html=''+
@@ -1119,7 +1143,7 @@ window.addEventListener('afterprint',function(){ document.body.classList.remove(
 function openDetail(id){
   var v=null; for(var i=0;i<visits.length;i++){ if(visits[i].id===id){v=visits[i];break;} } if(!v) return;
   var fp=(permits||[]).filter(function(x){return x.visit_id===v.id;})[0]||null;
-  var canDecide=(userRole==='officer'||userRole==='admin');
+  var canDecide=canEditVisitor();
   var permit='';
   if(fp){
     var ans=fp.answers||{}; var ansHtml=Object.keys(ans).map(function(k){ return '<div class="permit-q"><div>'+esc(k)+'</div><div style="text-align:right;font-weight:700;">'+esc(ans[k]||'—')+'</div></div>'; }).join('');
@@ -1143,7 +1167,7 @@ function openDetail(id){
     '<div><b>Email</b><br>'+esc((v.details&&v.details.email)||'—')+'</div><div></div>'+
     '<div><b>Time in</b><br>'+fmtDT(v.signed_in_at)+'</div><div><b>Time out</b><br>'+(v.signed_out_at?fmtDT(v.signed_out_at):'—')+'</div>'+
     '<div><b>Duration</b><br>'+dur(v.signed_in_at,v.signed_out_at)+'</div></div>'+indDetail(v)+permit+declSigBlock(v,fp)+
-    '<div style="display:flex;gap:8px;margin-top:16px;justify-content:flex-end;flex-wrap:wrap;">'+(isAdminRole()?'<button class="btn sm" id="dm-del" type="button" style="border-color:var(--red);color:var(--red);margin-right:auto;">\ud83d\uddd1 Delete log</button>':'')+actions+'<button class="btn sm" id="dm-pdf" type="button">🖨️ Save as PDF</button>'+(v.status==='on_site'?'<button class="btn red sm" id="dm-out">Sign out</button>':'')+'<button class="btn sm" id="dm-close">Close</button></div>';
+    '<div style="display:flex;gap:8px;margin-top:16px;justify-content:flex-end;flex-wrap:wrap;">'+(isAdminRole()?'<button class="btn sm" id="dm-del" type="button" style="border-color:var(--red);color:var(--red);margin-right:auto;">\ud83d\uddd1 Delete log</button>':'')+actions+'<button class="btn sm" id="dm-pdf" type="button">🖨️ Save as PDF</button>'+((v.status==='on_site'&&canEditVisitor())?'<button class="btn red sm" id="dm-out">Sign out</button>':'')+'<button class="btn sm" id="dm-close">Close</button></div>';
   showModal(html, function(root){
     var pf=root.querySelector('#dm-pdf'); if(pf) pf.addEventListener('click',function(){ printRecord(v,fp); });
     var oo=root.querySelector('#dm-out'); if(oo) oo.addEventListener('click',function(){ signOut(v.id); closeModal(); });
@@ -1407,10 +1431,24 @@ wireAccount();
 var TITLES={dashboard:'Dashboard',visitors:'Visitor Logs',permits:'Work Permits',sites:'Sites',settings:'Kiosk QR & rules',company:'Company Setup'};
 function roleLevel(){ if(isOwner) return 'admin'; var r=(userRole||'').toLowerCase(); if(r==='admin') return 'admin'; if(r==='officer'||r==='reception') return 'officer'; return 'viewer'; }
 function isAdminRole(){ return roleLevel()==='admin'; }
-function navAccess(){ var lv=roleLevel(); if(lv==='admin') return ['dashboard','visitors','kiosk-open','company']; if(lv==='officer') return ['dashboard','visitors','kiosk-open']; return ['dashboard','kiosk-open']; }
+function navAccess(){ var lv=roleLevel();
+  if(lv==='admin')   return ['dashboard','visitors','kiosk-open','company'];   // full view + edit
+  if(lv==='officer') return ['dashboard','visitors','kiosk-open','company'];   // view all, no edit
+  return ['dashboard','visitors','kiosk-open'];                                // viewer: view, no company, no edit
+}
+function canEditVisitor(){ return isAdminRole(); }   // only admin/owner may edit; officer + viewer are view-only
 function applyRole(){ var allow=navAccess();
   document.querySelectorAll('.navi[data-view]').forEach(function(n){ n.style.display=(allow.indexOf(n.dataset.view)>=0)?'':'none'; });
   var qk=document.getElementById('quickKiosk'); if(qk) qk.style.display=(allow.indexOf('kiosk-open')>=0)?'':'none';
+  // Read-only for officer/viewer: view but do not edit (backend RLS enforces it too).
+  var ro=!canEditVisitor();
+  document.body.classList.toggle('vis-readonly', ro);
+  var cv=document.getElementById('v-company');
+  if(cv){
+    var ban=document.getElementById('ro-banner-company');
+    if(ro && !ban){ ban=document.createElement('div'); ban.className='ro-banner'; ban.id='ro-banner-company'; ban.innerHTML='👁 View only — you can see these settings, but only an admin can change them.'; cv.insertBefore(ban, cv.firstChild); }
+    if(ban) ban.style.display = ro ? 'flex' : 'none';
+  }
   var cur=((document.querySelector('.view.active')||{}).id||'').replace('v-',''); var base=(cur==='settings'||cur==='sites'||cur==='permits')?'company':cur;
   if(cur && allow.indexOf(base)<0) goView('dashboard');
 }
@@ -1578,7 +1616,7 @@ function showInductionVideo(){
   var yid=ytId(url);
   if(yid){
     panel.innerHTML='<div class="vid-wrap"><div id="k-ytplayer"></div><button type="button" id="k-yt-play" class="btn primary">▶ Play induction video</button></div>'+note;
-    loadYtApi(function(){ try{ new YT.Player('k-ytplayer',{ videoId:yid, width:'100%', playerVars:{controls:(adminScrub?1:0),disablekb:(adminScrub?0:1),modestbranding:1,rel:0,fs:(adminScrub?1:0),playsinline:1,iv_load_policy:3},
+    loadYtApi(function(){ try{ new YT.Player('k-ytplayer',{ videoId:yid, width:'100%', playerVars:{controls:(adminScrub?1:0),disablekb:(adminScrub?0:1),modestbranding:1,rel:0,fs:1,playsinline:1,iv_load_policy:3},
       events:{ onReady:function(e){ var ov=document.getElementById('k-yt-play'); if(ov){ ov.onclick=function(){ try{ e.target.playVideo(); }catch(_){} ov.style.display='none'; }; } },
                onStateChange:function(e){ if(e.data===0){ renderQuiz(); } } } }); }catch(_){ panel.innerHTML='<div class="warnbox">Could not load the video. Please choose “Go to the safety office”.</div>'; } });
     return;
@@ -1589,14 +1627,14 @@ function showInductionVideo(){
     var va=document.getElementById('k-indvid'); if(va) va.addEventListener('ended',function(){ renderQuiz(); });
     return;
   }
-  panel.innerHTML='<div class="vid-wrap"><video id="k-indvid" src="'+esc(url)+'" playsinline preload="auto" controlsList="nodownload noplaybackrate noremoteplayback" disablepictureinpicture></video></div><div style="display:flex;gap:10px;align-items:center;margin-top:8px;"><button type="button" class="btn primary" id="k-vid-toggle">▶ Play induction video</button><span id="k-vid-time" class="muted" style="font-size:12px;"></span></div>'+note;
-  var v=document.getElementById('k-indvid'); var maxT=0; var tg=document.getElementById('k-vid-toggle'); var tl=document.getElementById('k-vid-time');
-  function fmtT(s){ s=Math.max(0,Math.floor(s||0)); var m=Math.floor(s/60), ss=s%60; return m+':'+(ss<10?'0':'')+ss; }
-  tg.addEventListener('click',function(){ if(v.paused){ var pr=v.play(); if(pr&&pr.catch) pr.catch(function(){}); tg.textContent='⏸ Pause'; } else { v.pause(); tg.textContent='▶ Play induction video'; } });
-  v.addEventListener('timeupdate',function(){ if(!v.seeking && v.currentTime>maxT) maxT=v.currentTime; if(tl&&v.duration) tl.textContent=fmtT(v.currentTime)+' / '+fmtT(v.duration); });
+  // Public: native controls give a Fullscreen button + play/pause, while the seek-lock
+  // below still stops skipping ahead (a forward drag snaps back to the furthest watched).
+  panel.innerHTML='<div class="vid-wrap"><video id="k-indvid" src="'+esc(url)+'" playsinline preload="auto" controls controlsList="nodownload noplaybackrate noremoteplayback" disablepictureinpicture></video></div>'+note;
+  var v=document.getElementById('k-indvid'); var maxT=0;
+  v.addEventListener('timeupdate',function(){ if(!v.seeking && v.currentTime>maxT) maxT=v.currentTime; });
   v.addEventListener('seeking',function(){ if(v.currentTime>maxT+0.5){ v.currentTime=maxT; } });
   v.addEventListener('ratechange',function(){ if(v.playbackRate!==1) v.playbackRate=1; });
-  v.addEventListener('ended',function(){ if(tg) tg.style.display='none'; renderQuiz(); });
+  v.addEventListener('ended',function(){ renderQuiz(); });
 }
 function renderQuiz(){
   var box=document.getElementById('k-ind-quiz'); if(!box) return;
