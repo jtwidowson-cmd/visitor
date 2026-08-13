@@ -60,7 +60,7 @@ body.kiosk-live #jtThemeBtn{display:none!important;}
     var side=document.getElementById('sideThemeBtn');
     var flt=document.getElementById('jtThemeBtn');
     if(!flt){ flt=document.createElement('button'); flt.id='jtThemeBtn'; flt.type='button'; flt.setAttribute('aria-label','Toggle light or dark'); document.body.appendChild(flt); }
-    function sync(){ if(side) side.textContent=lbl(); if(flt) flt.textContent=icon(); }
+    function sync(){ if(side) side.innerHTML='<span class="bic">'+icon()+'</span><span class="btxt">'+(isDark()?'Light mode':'Dark mode')+'</span>'; if(flt) flt.textContent=icon(); }
     function toggle(){ window.__jtSetTheme(isDark()?'light':'dark'); sync(); }
     if(side) side.addEventListener('click', toggle);
     if(flt) flt.addEventListener('click', toggle);
@@ -194,6 +194,54 @@ window.__sbLoad = (window.supabase) ? Promise.resolve(true) : new Promise(functi
   .vbar-col .bk{width:100%;max-width:34px;border-radius:6px 6px 0 0;background:var(--blue);min-height:3px;}
   .vbar-col.today .bk{background:var(--amber);}
   .vbar-col .bl{font-size:11px;color:var(--paper-dim);}
+
+  /* ===== Collapsible sidebar (desktop) ===== */
+  .side-brandtext{min-width:0;overflow:hidden;}
+  .collapse-toggle{width:40px;height:40px;border-radius:10px;border:1px solid var(--line);background:var(--panel);color:var(--paper-dim);cursor:pointer;display:none;align-items:center;justify-content:center;font-size:16px;font-weight:800;line-height:1;flex:none;transition:.15s;}
+  .collapse-toggle:hover{border-color:var(--blue);color:var(--blue);}
+  .side-actions .btn .bic{font-size:15px;}
+  @media(min-width:901px){
+    .collapse-toggle{display:inline-flex;}
+    .sidebar{transition:width .2s ease;}
+    .sidebar.collapsed{width:74px;overflow:visible;}
+    .sidebar.collapsed .side-brand{justify-content:center;padding:16px 8px 14px;}
+    .sidebar.collapsed .side-brandtext{display:none;}
+    .sidebar.collapsed .navsec{height:0;padding:0;margin:0;opacity:0;overflow:hidden;}
+    .sidebar.collapsed .navi{justify-content:center;padding:12px 0;gap:0;border-left-color:transparent;position:relative;}
+    .sidebar.collapsed .navi.active{border-left-color:transparent;background:var(--blue-soft);border-radius:12px;margin:0 10px;}
+    .sidebar.collapsed .navi .lbl{display:none;}
+    .sidebar.collapsed .navi .ic{font-size:19px;}
+    .sidebar.collapsed .navi:hover::after{content:attr(data-label);position:absolute;left:calc(100% + 10px);top:50%;transform:translateY(-50%);background:var(--paper);color:var(--panel);padding:6px 10px;border-radius:8px;font-size:12px;font-weight:600;white-space:nowrap;z-index:60;box-shadow:0 8px 24px rgba(0,0,0,.3);pointer-events:none;}
+    .sidebar.collapsed .side-foot{padding:12px 10px;}
+    .sidebar.collapsed .side-foot > label,
+    .sidebar.collapsed .side-foot #userInfo{display:none;}
+    .sidebar.collapsed .side-actions .btn{padding:9px 0;}
+    .sidebar.collapsed .side-actions .btn .btxt{display:none;}
+  }
+
+  /* ===== Premium dashboard ===== */
+  .tiles{grid-template-columns:repeat(4,1fr);}
+  @media(max-width:1100px){.tiles{grid-template-columns:repeat(2,1fr);}}
+  @media(max-width:520px){.tiles{grid-template-columns:1fr;}}
+  .tile{position:relative;border-radius:16px;padding:18px 20px;overflow:hidden;transition:transform .16s ease, box-shadow .16s ease;}
+  .tile::before{content:'';position:absolute;left:0;top:0;bottom:0;width:4px;background:var(--blue);opacity:.9;}
+  .tile:hover{transform:translateY(-2px);box-shadow:0 14px 34px rgba(20,40,70,.13);}
+  .tile.b::before{background:linear-gradient(180deg,var(--blue),#4a92c4);}
+  .tile.g::before{background:linear-gradient(180deg,var(--green),#4bbf62);}
+  .tile.o::before{background:linear-gradient(180deg,#5a6774,#8b97a5);}
+  .tile.a::before{background:linear-gradient(180deg,var(--amber),#e6bd66);}
+  .tile.a .n{color:var(--amber);} .tile.a .badge{background:rgba(200,144,31,.14);}
+  .tile .n{font-variant-numeric:tabular-nums;letter-spacing:-.01em;}
+  .card{border-radius:16px;}
+  .sec-h{position:relative;padding-bottom:10px;}
+  .sec-h::after{content:'';position:absolute;left:0;bottom:0;width:34px;height:3px;border-radius:3px;background:linear-gradient(90deg,var(--amber),#e6bd66);}
+  .bar-row .track{height:14px;background:var(--panel-2);box-shadow:inset 0 1px 2px rgba(0,0,0,.05);}
+  .bar-row .fill{background:linear-gradient(90deg,var(--blue),#4a92c4);transition:width .5s cubic-bezier(.22,.61,.36,1);}
+  .vbars{height:150px;gap:10px;align-items:flex-end;}
+  .vbar-col .bk{max-width:38px;border-radius:8px 8px 0 0;background:linear-gradient(180deg,#4a92c4,var(--blue));transition:height .5s cubic-bezier(.22,.61,.36,1),filter .15s;box-shadow:0 -1px 0 rgba(255,255,255,.15) inset;}
+  .vbar-col.today .bk{background:linear-gradient(180deg,#e6bd66,var(--amber));}
+  .vbar-col:hover .bk{filter:brightness(1.08);}
+  .vbar-col .bv{font-weight:800;}
 
   table{width:100%;border-collapse:collapse;font-size:13px;}
   th,td{text-align:left;padding:10px 8px;border-bottom:1px solid var(--line);vertical-align:middle;white-space:nowrap;}
@@ -381,19 +429,19 @@ window.__sbLoad = (window.supabase) ? Promise.resolve(true) : new Promise(functi
 <div id="app" class="shell hidden">
   <div class="scrim" id="scrim"></div>
   <aside class="sidebar" id="sidebar">
-    <div class="side-brand"><img id="sideLogo" alt=""><div><div class="n" id="sideCompany">JT.3rDegre3</div><div class="s">Visitor &amp; Contractor</div></div></div>
+    <div class="side-brand"><img id="sideLogo" alt=""><div class="side-brandtext"><div class="n" id="sideCompany">JT.3rDegre3</div><div class="s">Visitor &amp; Contractor</div></div></div>
     <div class="navsec">Menu</div>
-    <div class="navi active" data-view="dashboard"><span class="ic">📊</span> Dashboard</div>
-    <div class="navi" data-view="visitors"><span class="ic">📖</span> Visitor Logs</div>
-    <div class="navi" data-view="kiosk-open"><span class="ic">🖥️</span> Open Kiosk</div>
-    <div class="navi" data-view="company"><span class="ic">🏢</span> Company Setup</div>
+    <div class="navi active" data-view="dashboard" data-label="Dashboard"><span class="ic">📊</span><span class="lbl">Dashboard</span></div>
+    <div class="navi" data-view="visitors" data-label="Visitor Logs"><span class="ic">📖</span><span class="lbl">Visitor Logs</span></div>
+    <div class="navi" data-view="kiosk-open" data-label="Open Kiosk"><span class="ic">🖥️</span><span class="lbl">Open Kiosk</span></div>
+    <div class="navi" data-view="company" data-label="Company Setup"><span class="ic">🏢</span><span class="lbl">Company Setup</span></div>
     <div class="side-foot">
       <label>Signed in as</label>
       <div id="userInfo"></div>
       <div class="side-actions">
-        <button class="btn sm" id="sideThemeBtn" type="button">🌙 Dark mode</button>
-        <button class="btn sm" id="myAccountBtn2" type="button">My account</button>
-        <button class="btn sm" id="logoutNav" type="button">Log out</button>
+        <button class="btn sm" id="sideThemeBtn" type="button" data-label="Dark mode"><span class="bic">🌙</span><span class="btxt">Dark mode</span></button>
+        <button class="btn sm" id="myAccountBtn2" type="button" data-label="My account"><span class="bic">👤</span><span class="btxt">My account</span></button>
+        <button class="btn sm" id="logoutNav" type="button" data-label="Log out"><span class="bic">🚪</span><span class="btxt">Log out</span></button>
       </div>
     </div>
   </aside>
@@ -401,6 +449,7 @@ window.__sbLoad = (window.supabase) ? Promise.resolve(true) : new Promise(functi
   <div class="main">
     <div class="topbar">
       <button class="icon-btn" id="menuBtn">☰</button>
+      <button class="collapse-toggle" id="collapseBtn" type="button" title="Collapse menu" aria-label="Collapse or expand the menu">«</button>
       <h2 id="viewTitle">Dashboard</h2>
       <button class="btn sm blue" id="quickKiosk">🖥️ Open Kiosk</button>
     </div>
@@ -417,6 +466,7 @@ window.__sbLoad = (window.supabase) ? Promise.resolve(true) : new Promise(functi
           <div class="tile b"><div class="info"><div class="l">Total registered</div><div class="n" id="tReg">0</div></div><div class="badge">👥</div></div>
           <div class="tile g"><div class="info"><div class="l">Currently inside</div><div class="n" id="tInside">0</div></div><div class="badge">🚪</div></div>
           <div class="tile o"><div class="info"><div class="l">Total checked out</div><div class="n" id="tOut">0</div></div><div class="badge">↩️</div></div>
+          <div class="tile a"><div class="info"><div class="l">Open permits</div><div class="n" id="tPermits">0</div></div><div class="badge">🛡️</div></div>
         </div>
         <div class="panels">
           <div class="card"><div class="sec-h">Visitor status breakdown</div><div id="statusBreak"></div></div>
@@ -505,6 +555,7 @@ window.__sbLoad = (window.supabase) ? Promise.resolve(true) : new Promise(functi
           <div class="sec-h">Declarations (shown at every sign-in)</div>
           <label>Truthfulness declaration</label><textarea id="se-decl-truth" rows="3"></textarea>
           <label>Data protection / GDPR declaration</label><textarea id="se-decl-gdpr" rows="3"></textarea>
+          <label>Safety reminder declaration</label><textarea id="se-decl-safety" rows="3"></textarea>
           <div class="muted" style="font-size:11.5px;margin-top:4px;">Tip: use {company} to auto-insert your company name.</div>
           <hr style="border:none;border-top:1px solid var(--line);margin:16px 0;">
           <div class="sec-h">Safety induction video</div>
@@ -600,6 +651,7 @@ var SUPABASE_ANON_KEY='sb_publishable_yYB5wciGbc7zJyc7oe1RYg_B9npEyqN';
 var APP_KEY='visitor';
 var DECL_TRUTH_DEFAULT='I confirm that all information in this permit is true and accurate. I accept that the company is not liable for any consequences arising from false or misleading information provided by me.';
 var DECL_GDPR_DEFAULT='By registering using this form, you acknowledge that {company} will collect and process your personal data for the purposes of site access registration and record-keeping in accordance with the General Data Protection Regulation (GDPR) and the Data Protection Act 2018 (Ireland).';
+var DECL_SAFETY_DEFAULT='I will strictly obey and follow all company site rules, ensuring full compliance with safety procedures and maintaining a safe working environment for everyone.';
 var INDUCTION_QUESTIONS=[
   {q:'What must you wear at all times in marked PPE areas?',opts:['Only when you feel like it','Full correct PPE — hard hat, hi-vis, safety boots and any eye/ear protection required','Just a hi-vis vest'],correct:1},
   {q:'Before using any tool or equipment, you must:',opts:['Use it straight away','Check it is inspected, in date and fit for use — and report any defects','Borrow one without checking'],correct:1},
@@ -610,7 +662,7 @@ var INDUCTION_QUESTIONS=[
 var sb=null; function initSb(){ if(sb) return true; try{ if(window.supabase && window.supabase.createClient){ sb=window.supabase.createClient(SUPABASE_URL, SUPABASE_ANON_KEY); return true; } }catch(e){ console.error('Supabase init failed',e); } return false; } initSb();
 var userEmail='', userName='', userRole='', isOwner=false, myId=null;
 var company={id:null,name:'',invite:'',email:''};
-var settings={induction_text:'',emergency_text:'',require_induction:false,require_vehicle:false,kiosk_token:'',decl_truth:'',decl_gdpr:'',induction_video_url:'',induction_questions:null,permit_checklists:null};
+var settings={induction_text:'',emergency_text:'',require_induction:false,require_vehicle:false,kiosk_token:'',decl_truth:'',decl_gdpr:'',decl_safety:'',induction_video_url:'',induction_questions:null,permit_checklists:null};
 var sites=[], visits=[];
 var PURPOSES=['Contractor','Delivery','Customer','Visitor','Others'];
 var PERMIT_TYPES=['General Work','Hot Work','Working at Height','Confined Space','Electrical / Isolation (LOTO)','Excavation','Lifting Operation','Blasting (Quarry)'];
@@ -710,7 +762,7 @@ async function loadCompany(){
 }
 async function loadSettings(){
   try{ var r=await sb.from('visit_settings').select('*').limit(1).single();
-    if(r.data){ settings={induction_text:r.data.induction_text||'',emergency_text:r.data.emergency_text||'',require_induction:!!r.data.require_induction,require_vehicle:!!r.data.require_vehicle,kiosk_token:r.data.kiosk_token||'',decl_truth:r.data.decl_truth||'',decl_gdpr:r.data.decl_gdpr||'',induction_video_url:r.data.induction_video_url||'',induction_questions:(r.data.induction_questions&&r.data.induction_questions.length?r.data.induction_questions:null),permit_checklists:(r.data.permit_checklists&&Object.keys(r.data.permit_checklists).length?r.data.permit_checklists:null)}; }
+    if(r.data){ settings={induction_text:r.data.induction_text||'',emergency_text:r.data.emergency_text||'',require_induction:!!r.data.require_induction,require_vehicle:!!r.data.require_vehicle,kiosk_token:r.data.kiosk_token||'',decl_truth:r.data.decl_truth||'',decl_gdpr:r.data.decl_gdpr||'',decl_safety:r.data.decl_safety||'',induction_video_url:r.data.induction_video_url||'',induction_questions:(r.data.induction_questions&&r.data.induction_questions.length?r.data.induction_questions:null),permit_checklists:(r.data.permit_checklists&&Object.keys(r.data.permit_checklists).length?r.data.permit_checklists:null)}; }
   }catch(_){}
 }
 async function loadSites(){ try{ var r=await sb.from('visitor_sites').select('*').order('name'); sites=(!r.error&&r.data)?r.data:[]; }catch(_){ sites=[]; } }
@@ -873,7 +925,7 @@ function openPermitView(id){
     row('Valid from',(p.valid_from_date||'')+' '+(p.valid_from_time||''))+row('Valid to',(p.valid_to_date||'')+' '+(p.valid_to_time||''))+
     row('Induction complete',p.induction_done?'Yes':'No')+row('Beacon light',p.beacon_light?'Yes':'No (hazard marshal)')+
     '<div class="sec-h" style="margin-top:12px;">Checklist</div>'+(ansHtml||'<div class="muted">—</div>')+
-    '<div class="declbox" style="margin-top:12px;overflow-wrap:anywhere;">✔ Truthfulness &amp; GDPR declarations accepted'+(p.signature?('<div style="margin-top:6px;"><b>Signature:</b><br><img src="'+esc(p.signature)+'" style="max-width:240px;max-height:100px;background:#fff;border:1px solid var(--line);border-radius:8px;padding:4px;"></div>'):'')+'</div>'+
+    '<div class="declbox" style="margin-top:12px;overflow-wrap:anywhere;">✔ Truthfulness, GDPR &amp; Safety declarations accepted'+(p.signature?('<div style="margin-top:6px;"><b>Signature:</b><br><img src="'+esc(p.signature)+'" style="max-width:240px;max-height:100px;background:#fff;border:1px solid var(--line);border-radius:8px;padding:4px;"></div>'):'')+'</div>'+
     (p.decision_note?('<div class="muted" style="font-size:13px;">Note: '+esc(p.decision_note)+'</div>'):'');
   if(canDecide && p.status==='submitted'){
     html+='<label style="margin-top:10px;">Decision note (optional)</label><input id="pv-note">'+
@@ -914,6 +966,8 @@ function renderDashboard(){
   document.getElementById('tReg').textContent=list.length;
   document.getElementById('tInside').textContent=inside.length;
   document.getElementById('tOut').textContent=out.length;
+  var openP=(permits||[]).filter(function(p){return p.status==='submitted'||p.status==='approved';}).length;
+  var tp=document.getElementById('tPermits'); if(tp) tp.textContent=openP;
   // status breakdown
   var sb2={ 'Currently inside':inside.length, 'Checked out':out.length, 'Expected':list.filter(function(v){return v.status==='expected';}).length };
   var maxS=Math.max(1,sb2['Currently inside'],sb2['Checked out'],sb2['Expected']);
@@ -1079,6 +1133,7 @@ function renderSettingsForm(){
   document.getElementById('se-veh').checked=!!settings.require_vehicle;
   var dt=document.getElementById('se-decl-truth'); if(dt) dt.value=settings.decl_truth||DECL_TRUTH_DEFAULT;
   var dg=document.getElementById('se-decl-gdpr'); if(dg) dg.value=settings.decl_gdpr||DECL_GDPR_DEFAULT;
+  var ds=document.getElementById('se-decl-safety'); if(ds) ds.value=settings.decl_safety||DECL_SAFETY_DEFAULT;
   var vu=document.getElementById('se-vid-url'); if(vu) vu.value=settings.induction_video_url||'';
   renderVidPreview(); renderIQEditor(); if(typeof pcRender==='function') pcRender();
 }
@@ -1121,9 +1176,9 @@ function readIQEditor(){
 }
 function renderVidPreview(){ var pv=document.getElementById('se-vid-preview'); if(!pv) return; var u=(document.getElementById('se-vid-url')||{}).value||settings.induction_video_url||''; if(!u){ pv.innerHTML='<div class="muted" style="font-size:12.5px;margin-top:6px;">No induction video yet.</div>'; return; } if(ytId(u)){ pv.innerHTML='<div class="muted" style="font-size:12.5px;margin-top:8px;color:var(--green);">✓ YouTube video linked — plays at sign-in with the seek bar locked (any length, all phones).</div>'; } else { pv.innerHTML='<video src="'+esc(u)+'" controls style="width:100%;max-width:360px;border-radius:10px;margin-top:8px;background:#000;"></video>'; } }
 document.getElementById('se-save').addEventListener('click', async function(){
-  var patch={ company_id:company.id, induction_text:document.getElementById('se-induction').value, emergency_text:document.getElementById('se-emergency').value, require_induction:document.getElementById('se-ind').checked, require_vehicle:document.getElementById('se-veh').checked, kiosk_token:settings.kiosk_token||null, decl_truth:document.getElementById('se-decl-truth').value, decl_gdpr:document.getElementById('se-decl-gdpr').value, induction_video_url:(document.getElementById('se-vid-url').value||'').trim(), induction_questions:readIQEditor(), updated_at:new Date().toISOString() };
+  var patch={ company_id:company.id, induction_text:document.getElementById('se-induction').value, emergency_text:document.getElementById('se-emergency').value, require_induction:document.getElementById('se-ind').checked, require_vehicle:document.getElementById('se-veh').checked, kiosk_token:settings.kiosk_token||null, decl_truth:document.getElementById('se-decl-truth').value, decl_gdpr:document.getElementById('se-decl-gdpr').value, decl_safety:document.getElementById('se-decl-safety').value, induction_video_url:(document.getElementById('se-vid-url').value||'').trim(), induction_questions:readIQEditor(), updated_at:new Date().toISOString() };
   var r=await sb.from('visit_settings').upsert(patch,{onConflict:'company_id'}); if(r.error){ toast('Admins only.'); return; }
-  settings.induction_text=patch.induction_text; settings.emergency_text=patch.emergency_text; settings.require_induction=patch.require_induction; settings.require_vehicle=patch.require_vehicle; settings.decl_truth=patch.decl_truth; settings.decl_gdpr=patch.decl_gdpr; settings.induction_video_url=patch.induction_video_url; settings.induction_questions=(patch.induction_questions&&patch.induction_questions.length?patch.induction_questions:null); toast('Settings saved.');
+  settings.induction_text=patch.induction_text; settings.emergency_text=patch.emergency_text; settings.require_induction=patch.require_induction; settings.require_vehicle=patch.require_vehicle; settings.decl_truth=patch.decl_truth; settings.decl_gdpr=patch.decl_gdpr; settings.decl_safety=patch.decl_safety; settings.induction_video_url=patch.induction_video_url; settings.induction_questions=(patch.induction_questions&&patch.induction_questions.length?patch.induction_questions:null); toast('Settings saved.');
 });
 /* Auto-compress a big video (downscale + lower bitrate) so it uploads easily. Real-time re-encode. */
 function canCompressVideo(){ try{ return typeof MediaRecorder!=='undefined' && !!document.createElement('canvas').captureStream; }catch(_){ return false; } }
@@ -1292,6 +1347,16 @@ document.querySelectorAll('.navi[data-view]').forEach(function(n){ n.addEventLis
 document.getElementById('menuBtn').addEventListener('click',function(){ document.getElementById('sidebar').classList.toggle('open'); document.getElementById('scrim').classList.toggle('show'); });
 document.getElementById('scrim').addEventListener('click',closeSidebar);
 function closeSidebar(){ document.getElementById('sidebar').classList.remove('open'); document.getElementById('scrim').classList.remove('show'); }
+/* Desktop collapsible sidebar — collapse to an icon rail, remembers the choice. */
+(function(){
+  var KEY='jt_vis_sidebar';
+  var sbEl=document.getElementById('sidebar'), tg=document.getElementById('collapseBtn');
+  if(!sbEl||!tg) return;
+  function apply(collapsed){ sbEl.classList.toggle('collapsed',collapsed); tg.textContent=collapsed?'»':'«'; tg.title=collapsed?'Expand menu':'Collapse menu'; try{ localStorage.setItem(KEY,collapsed?'collapsed':'expanded'); }catch(_){ } }
+  var saved='expanded'; try{ saved=localStorage.getItem(KEY)||'expanded'; }catch(_){ }
+  apply(saved==='collapsed');
+  tg.addEventListener('click',function(){ apply(!sbEl.classList.contains('collapsed')); });
+})();
 document.getElementById('quickKiosk').addEventListener('click',function(){ if(navAccess().indexOf('kiosk-open')<0){ toast('Admins only.'); return; } openKiosk('admin'); });
 document.getElementById('cov').addEventListener('change',renderDashboard);
 document.getElementById('refreshBtn').addEventListener('click',async function(){ this.disabled=true; await loadVisits(); renderDashboard(); this.disabled=false; toast('Analytics refreshed.'); });
@@ -1317,7 +1382,7 @@ async function bootPublicKiosk(token){
   company.name=KINFO.company_name||''; applyBrand(KINFO.logo_url||'');
   settings.induction_text=KINFO.induction_text||''; settings.emergency_text=KINFO.emergency_text||'';
   settings.require_induction=!!KINFO.require_induction; settings.require_vehicle=!!KINFO.require_vehicle;
-  settings.decl_truth=KINFO.decl_truth||''; settings.decl_gdpr=KINFO.decl_gdpr||'';
+  settings.decl_truth=KINFO.decl_truth||''; settings.decl_gdpr=KINFO.decl_gdpr||''; settings.decl_safety=KINFO.decl_safety||'';
   settings.induction_video_url=KINFO.induction_video_url||'';
   settings.induction_questions=(KINFO.induction_questions&&KINFO.induction_questions.length?KINFO.induction_questions:null);
   settings.permit_checklists=(KINFO.permit_checklists&&Object.keys(KINFO.permit_checklists).length?KINFO.permit_checklists:null);
@@ -1457,9 +1522,11 @@ function renderQuiz(){
 function wpDeclCard(){
   var t=(settings.decl_truth||DECL_TRUTH_DEFAULT);
   var g=(settings.decl_gdpr||DECL_GDPR_DEFAULT).replace(/\{company\}/g, company.name||'the company');
+  var s=(settings.decl_safety||DECL_SAFETY_DEFAULT).replace(/\{company\}/g, company.name||'the company');
   return '<div class="pcard"><div class="ph">📜 Declarations</div>'+
     '<div class="declbox2"><label class="ackline"><input type="checkbox" id="k-decl-truth"> <span>'+esc(t)+'</span></label></div>'+
-    '<div class="declbox2"><label class="ackline"><input type="checkbox" id="k-decl-gdpr"> <span>'+esc(g)+'</span></label></div></div>';
+    '<div class="declbox2"><label class="ackline"><input type="checkbox" id="k-decl-gdpr"> <span>'+esc(g)+'</span></label></div>'+
+    '<div class="declbox2"><label class="ackline"><input type="checkbox" id="k-decl-safety"> <span><b>Safety reminder:</b> '+esc(s)+'</span></label></div></div>';
 }
 function wpSignCard(){
   return '<div class="pcard"><div class="ph">✍️ Signature</div><div class="muted" style="font-size:12px;">Sign in the box below.</div><div class="sigpad-wrap"><canvas id="k-sig" class="sigpad"></canvas><button type="button" class="btn sm sig-clear" id="k-sig-clear">Clear</button></div></div>';
@@ -1492,9 +1559,10 @@ async function kioskSubmit(){
   if(_permitState.ind==='No' && _permitState.mode!=='office' && !_permitState.passed){ return fail('Complete the induction video and questions, or choose the safety office.'); }
   var attendees=[]; var attInputs=document.querySelectorAll('#k-att-list .k-att-name'); if(attInputs.length){ attInputs.forEach(function(el){ var vv=(el.value||'').trim(); if(vv) attendees.push(vv); }); } else { var attEl=document.getElementById('k-ind-att'); if(attEl){ attendees=attEl.value.split(/\n|,/).map(function(x){return x.trim();}).filter(Boolean); } }
   if(_permitState.ind==='No' && !attendees.length){ return fail('Please enter the name(s) of everyone who completed the induction.'); }
-  var dT=document.getElementById('k-decl-truth'), dG=document.getElementById('k-decl-gdpr');
+  var dT=document.getElementById('k-decl-truth'), dG=document.getElementById('k-decl-gdpr'), dS=document.getElementById('k-decl-safety');
   if(!dT||!dT.checked){ return fail('Please accept the truthfulness declaration.'); }
   if(!dG||!dG.checked){ return fail('Please accept the data protection (GDPR) declaration.'); }
+  if(!dS||!dS.checked){ return fail('Please accept the safety reminder declaration.'); }
   if(!_permitState.sig){ return fail('Please sign in the signature box.'); }
   var inductionDone=(_permitState.ind==='Yes')||(_permitState.passed===true);
   var details={ signature:_permitState.sig, induction_done:inductionDone, induction_mode:(_permitState.ind==='Yes'?'prior':(_permitState.ind==='N/A'?'not_required':(_permitState.mode||''))), gdpr_ack:true, truth_ack:true, attendees:attendees, visit_type:(_visitType||''), inspection_ack:(_visitType==='Inspection') }, permitPayload=null;
