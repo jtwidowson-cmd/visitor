@@ -334,6 +334,33 @@ window.__sbLoad = (window.supabase) ? Promise.resolve(true) : new Promise(functi
   .q-item .qopt{display:flex;align-items:center;gap:8px;margin-top:6px;font-weight:500;cursor:pointer;}
   .declbox2{background:var(--panel-2);border:1px solid var(--line);border-radius:10px;padding:12px 14px;font-size:13px;margin-top:10px;line-height:1.5;}
   .declbox2 .ackline{display:flex;gap:8px;align-items:flex-start;margin-top:8px;text-transform:none;color:var(--paper);font-weight:500;font-size:13px;}
+  /* Yes/No/tri — force every button to centre its label so none sits high/low */
+  .tri{align-items:stretch;}
+  .tri .tb{display:inline-flex;align-items:center;justify-content:center;line-height:1;min-height:40px;margin:0;}
+  #k-ind-tri{gap:0;}
+  /* Acknowledgement lines are full sentences, not field labels — keep them readable (not ALL CAPS) */
+  .ack{text-transform:none;letter-spacing:normal;font-weight:500;}
+  .pcard label.ack{font-size:13.5px;color:var(--paper);text-transform:none;letter-spacing:normal;font-weight:500;margin:4px 0;}
+  /* Induction video fits both portrait and landscape on mobile */
+  .vid-wrap video{max-height:min(58vh,460px);object-fit:contain;margin:0 auto;}
+  @media (orientation:landscape) and (max-height:600px){ .vid-wrap video,#k-ytplayer{max-height:82vh;} }
+  /* Per-record printable document (Save as PDF) */
+  #printArea{display:none;}
+  @media print{
+    body.print-record > *:not(#printArea){display:none!important;}
+    body.print-record #printArea{display:block!important;}
+    #printArea .pr-doc{padding:6mm 4mm;color:#111;font-family:var(--font);}
+    #printArea .pr-head{border-bottom:2px solid #c8901f;padding-bottom:8px;margin-bottom:14px;}
+    #printArea .pr-co{font-size:20px;font-weight:800;}
+    #printArea .pr-title{font-size:13px;color:#555;text-transform:uppercase;letter-spacing:.06em;}
+    #printArea table.pr-kv{width:100%;border-collapse:collapse;font-size:13px;margin-bottom:12px;}
+    #printArea table.pr-kv td{padding:5px 8px;border-bottom:1px solid #e2e2e2;vertical-align:top;}
+    #printArea table.pr-kv td.k{color:#555;width:34%;font-weight:600;}
+    #printArea .pr-sec{font-size:12px;font-weight:800;text-transform:uppercase;letter-spacing:.05em;color:#c8901f;margin:14px 0 6px;}
+    #printArea .pr-decl{font-size:12px;line-height:1.5;margin:4px 0;}
+    #printArea .pr-sig img{max-width:260px;max-height:110px;border:1px solid #ccc;border-radius:6px;padding:4px;background:#fff;}
+    #printArea .pr-foot{margin-top:18px;font-size:11px;color:#999;}
+  }
   @media(max-width:560px){ .permit-q{grid-template-columns:1fr;} .dtsplit{grid-template-columns:1fr 1fr;} }
   /* ---- responsive: mobile / tablet ---- */
   @media(max-width:860px){
@@ -369,6 +396,9 @@ window.__sbLoad = (window.supabase) ? Promise.resolve(true) : new Promise(functi
   <div class="kiosk-top"><img id="kioskLogo" alt=""><div class="t"><div class="n" id="kioskCo">Visitor Log System</div><div class="s">Please select an option below to proceed</div></div><button class="btn sm no-print" id="kioskExit">Exit</button></div>
   <div class="kiosk-card" id="kioskBody"></div>
 </div>
+
+<!-- Per-record printable document (filled on demand by printRecord → Save as PDF) -->
+<div id="printArea"></div>
 
 <!-- ============ LOGIN (admin) ============ -->
 <div id="loginOverlay" class="overlay">
@@ -1035,13 +1065,57 @@ function declSigBlock(v, fp){
   if(!truthOK && !gdprOK && !sig) return '';
   var tTxt=(settings.decl_truth||DECL_TRUTH_DEFAULT);
   var gTxt=(settings.decl_gdpr||DECL_GDPR_DEFAULT).replace(/\{company\}/g, company.name||'the company');
+  var sTxt=(settings.decl_safety||DECL_SAFETY_DEFAULT).replace(/\{company\}/g, company.name||'the company');
+  var safeOK=truthOK||gdprOK; // safety accepted at sign-in alongside the others
   var out='<div class="declbox" style="margin-top:10px;font-size:12.5px;line-height:1.5;overflow-wrap:anywhere;word-break:break-word;">';
   out+='<div style="font-weight:700;margin-bottom:4px;">Declarations &amp; signature</div>';
   out+='<div>'+(truthOK?'\u2713':'\u2014')+' <b>Truthfulness:</b> '+esc(tTxt)+'</div>';
   out+='<div style="margin-top:4px;">'+(gdprOK?'\u2713':'\u2014')+' <b>Data protection (GDPR):</b> '+esc(gTxt)+'</div>';
+  out+='<div style="margin-top:4px;">'+(safeOK?'\u2713':'\u2014')+' <b>Safety reminder:</b> '+esc(sTxt)+'</div>';
   if(sig){ out+='<div style="margin-top:8px;"><b>Signature:</b><br><img src="'+esc(sig)+'" alt="signature" style="max-width:240px;max-height:100px;background:#fff;border:1px solid var(--line);border-radius:8px;padding:4px;margin-top:4px;"></div>'; }
   out+='</div>'; return out;
 }
+/* Build a clean one-record printable document (visitor / meeting / contractor) that
+   shows the signature, then open the browser print dialog \u2192 "Save as PDF". */
+function printRecord(v, fp){
+  if(!v) return;
+  var dt=(v.details)||{}; var sig=(v.signature)||dt.signature||(fp&&fp.signature)||'';
+  var truthOK=dt.truth_ack||(fp&&fp.declaration_ack); var gdprOK=dt.gdpr_ack||(fp&&fp.declaration_ack);
+  var tTxt=(settings.decl_truth||DECL_TRUTH_DEFAULT);
+  var gTxt=(settings.decl_gdpr||DECL_GDPR_DEFAULT).replace(/\{company\}/g, company.name||'the company');
+  var sTxt=(settings.decl_safety||DECL_SAFETY_DEFAULT).replace(/\{company\}/g, company.name||'the company');
+  function kv(k,val){ if(val===''||val==null) return ''; return '<tr><td class="k">'+esc(k)+'</td><td>'+esc(val)+'</td></tr>'; }
+  var rows=kv('Name',v.visitor_name)+kv('Company / affiliation',v.visitor_company)+kv('Who they visited',v.host)+
+    kv('Purpose',v.purpose)+kv('Status',(v.status==='on_site'?'On site':v.status==='expected'?'Expected':'Signed out'))+
+    kv('Vehicle plate',v.vehicle_reg)+kv('Contact',v.phone)+kv('Time in',fmtDT(v.signed_in_at))+
+    kv('Time out',v.signed_out_at?fmtDT(v.signed_out_at):'\u2014')+kv('Duration',dur(v.signed_in_at,v.signed_out_at));
+  var att=(dt.attendees||[]);
+  var ind=''; if(dt.induction_mode==='not_required'){ ind='Not required (office / visitor only)'; }
+    else if(dt.induction_done!=null){ ind=(dt.induction_done?'Completed':'Pending')+(dt.induction_mode?(' \u00b7 '+dt.induction_mode):''); }
+  var permitHtml='';
+  if(fp){
+    var ans=fp.answers||{}; var ah=Object.keys(ans).map(function(k){ return '<tr><td class="k">'+esc(k)+'</td><td>'+esc(ans[k]||'\u2014')+'</td></tr>'; }).join('');
+    permitHtml='<div class="pr-sec">Work permit \u2014 '+esc(fp.permit_type||'')+' ('+esc(fp.status||'')+')</div>'+
+      '<table class="pr-kv">'+kv('Reference',fp.ref)+kv('Applicant',(fp.applicant_name||'')+(fp.applicant_email?(' ('+fp.applicant_email+')'):''))+
+      kv('Work',fp.work_description)+kv('Location',fp.site)+
+      kv('Valid',((fp.valid_from_date||'')+' '+(fp.valid_from_time||''))+' \u2192 '+((fp.valid_to_date||'')+' '+(fp.valid_to_time||'')))+ah+'</table>';
+  }
+  var declHtml='<div class="pr-sec">Declarations accepted</div>'+
+    '<div class="pr-decl">'+(truthOK?'\u2713':'\u2014')+' <b>Truthfulness:</b> '+esc(tTxt)+'</div>'+
+    '<div class="pr-decl">'+(gdprOK?'\u2713':'\u2014')+' <b>Data protection (GDPR):</b> '+esc(gTxt)+'</div>'+
+    '<div class="pr-decl">'+((truthOK||gdprOK)?'\u2713':'\u2014')+' <b>Safety reminder:</b> '+esc(sTxt)+'</div>';
+  var sigHtml=sig?('<div class="pr-sec">Signature</div><div class="pr-sig"><img src="'+esc(sig)+'" alt="signature"></div>'):'<div class="pr-sec">Signature</div><div class="pr-decl">\u2014 No signature captured</div>';
+  var when=''; try{ when=new Date().toLocaleString(); }catch(_){ }
+  var pa=document.getElementById('printArea');
+  pa.innerHTML='<div class="pr-doc"><div class="pr-head"><div class="pr-co">'+esc(company.name||'JT.3rDegre3')+'</div><div class="pr-title">Visitor &amp; Contractor Record</div></div>'+
+    '<table class="pr-kv">'+rows+'</table>'+
+    (ind?('<div class="pr-sec">Safety induction</div><div class="pr-decl">'+esc(ind)+(att.length?(' \u00b7 Attendees: '+att.map(esc).join(', ')):'')+'</div>'):'')+
+    permitHtml+declHtml+sigHtml+
+    '<div class="pr-foot">Generated '+esc(when)+' \u2014 JT.3rDegre3 Visitor &amp; Contractor</div></div>';
+  document.body.classList.add('print-record');
+  try{ window.print(); }catch(_){ }
+}
+window.addEventListener('afterprint',function(){ document.body.classList.remove('print-record'); var pa=document.getElementById('printArea'); if(pa) pa.innerHTML=''; });
 function openDetail(id){
   var v=null; for(var i=0;i<visits.length;i++){ if(visits[i].id===id){v=visits[i];break;} } if(!v) return;
   var fp=(permits||[]).filter(function(x){return x.visit_id===v.id;})[0]||null;
@@ -1068,8 +1142,9 @@ function openDetail(id){
     '<div><b>Vehicle</b><br>'+esc(v.vehicle_reg||'—')+'</div><div><b>Contact</b><br>'+esc(v.phone||'—')+'</div>'+
     '<div><b>Time in</b><br>'+fmtDT(v.signed_in_at)+'</div><div><b>Time out</b><br>'+(v.signed_out_at?fmtDT(v.signed_out_at):'—')+'</div>'+
     '<div><b>Duration</b><br>'+dur(v.signed_in_at,v.signed_out_at)+'</div></div>'+indDetail(v)+permit+declSigBlock(v,fp)+
-    '<div style="display:flex;gap:8px;margin-top:16px;justify-content:flex-end;flex-wrap:wrap;">'+(isAdminRole()?'<button class="btn sm" id="dm-del" type="button" style="border-color:var(--red);color:var(--red);margin-right:auto;">\ud83d\uddd1 Delete log</button>':'')+actions+(v.status==='on_site'?'<button class="btn red sm" id="dm-out">Sign out</button>':'')+'<button class="btn sm" id="dm-close">Close</button></div>';
+    '<div style="display:flex;gap:8px;margin-top:16px;justify-content:flex-end;flex-wrap:wrap;">'+(isAdminRole()?'<button class="btn sm" id="dm-del" type="button" style="border-color:var(--red);color:var(--red);margin-right:auto;">\ud83d\uddd1 Delete log</button>':'')+actions+'<button class="btn sm" id="dm-pdf" type="button">🖨️ Save as PDF</button>'+(v.status==='on_site'?'<button class="btn red sm" id="dm-out">Sign out</button>':'')+'<button class="btn sm" id="dm-close">Close</button></div>';
   showModal(html, function(root){
+    var pf=root.querySelector('#dm-pdf'); if(pf) pf.addEventListener('click',function(){ printRecord(v,fp); });
     var oo=root.querySelector('#dm-out'); if(oo) oo.addEventListener('click',function(){ signOut(v.id); closeModal(); });
     var ap=root.querySelector('#dm-approve'); if(ap) ap.addEventListener('click',function(){ decidePermitDetail(fp,'approved'); });
     var rj=root.querySelector('#dm-reject'); if(rj) rj.addEventListener('click',function(){ decidePermitDetail(fp,'rejected'); });
@@ -1331,7 +1406,7 @@ wireAccount();
 var TITLES={dashboard:'Dashboard',visitors:'Visitor Logs',permits:'Work Permits',sites:'Sites',settings:'Kiosk QR & rules',company:'Company Setup'};
 function roleLevel(){ if(isOwner) return 'admin'; var r=(userRole||'').toLowerCase(); if(r==='admin') return 'admin'; if(r==='officer'||r==='reception') return 'officer'; return 'viewer'; }
 function isAdminRole(){ return roleLevel()==='admin'; }
-function navAccess(){ var lv=roleLevel(); if(lv==='admin') return ['dashboard','visitors','kiosk-open','company']; if(lv==='officer') return ['dashboard','visitors']; return ['dashboard']; }
+function navAccess(){ var lv=roleLevel(); if(lv==='admin') return ['dashboard','visitors','kiosk-open','company']; if(lv==='officer') return ['dashboard','visitors','kiosk-open']; return ['dashboard','kiosk-open']; }
 function applyRole(){ var allow=navAccess();
   document.querySelectorAll('.navi[data-view]').forEach(function(n){ n.style.display=(allow.indexOf(n.dataset.view)>=0)?'':'none'; });
   var qk=document.getElementById('quickKiosk'); if(qk) qk.style.display=(allow.indexOf('kiosk-open')>=0)?'':'none';
@@ -1493,13 +1568,22 @@ function loadYtApi(cb){ if(window.YT&&window.YT.Player){ cb(); return; } _ytQ.pu
 function showInductionVideo(){
   var panel=document.getElementById('k-ind-panel'); var url=settings.induction_video_url||'';
   if(!url){ panel.innerHTML='<div class="warnbox">No induction video has been set up yet. Please choose “Go to the safety office”.</div>'; return; }
-  var note='<div class="muted" style="font-size:12px;margin-top:6px;">Please watch to the end — you cannot skip ahead. Questions appear when the video finishes.</div><div id="k-ind-quiz" style="margin-top:10px;"></div>';
+  // Admins (previewing / testing from the console) may fast-forward. Actual visitors
+  // signing in (public kiosk, a purpose of visit selected) cannot skip ahead.
+  var adminScrub=(KMODE==='admin');
+  var note='<div class="muted" style="font-size:12px;margin-top:6px;">'+(adminScrub?'Admin preview — you can skip / fast-forward. Questions appear when the video finishes.':'Please watch to the end — you cannot skip ahead. Questions appear when the video finishes.')+'</div><div id="k-ind-quiz" style="margin-top:10px;"></div>';
   var yid=ytId(url);
   if(yid){
     panel.innerHTML='<div class="vid-wrap"><div id="k-ytplayer"></div><button type="button" id="k-yt-play" class="btn primary">▶ Play induction video</button></div>'+note;
-    loadYtApi(function(){ try{ new YT.Player('k-ytplayer',{ videoId:yid, width:'100%', playerVars:{controls:0,disablekb:1,modestbranding:1,rel:0,fs:0,playsinline:1,iv_load_policy:3},
+    loadYtApi(function(){ try{ new YT.Player('k-ytplayer',{ videoId:yid, width:'100%', playerVars:{controls:(adminScrub?1:0),disablekb:(adminScrub?0:1),modestbranding:1,rel:0,fs:(adminScrub?1:0),playsinline:1,iv_load_policy:3},
       events:{ onReady:function(e){ var ov=document.getElementById('k-yt-play'); if(ov){ ov.onclick=function(){ try{ e.target.playVideo(); }catch(_){} ov.style.display='none'; }; } },
                onStateChange:function(e){ if(e.data===0){ renderQuiz(); } } } }); }catch(_){ panel.innerHTML='<div class="warnbox">Could not load the video. Please choose “Go to the safety office”.</div>'; } });
+    return;
+  }
+  if(adminScrub){
+    // Admin preview — full native controls (seek + fast-forward allowed).
+    panel.innerHTML='<div class="vid-wrap"><video id="k-indvid" src="'+esc(url)+'" playsinline preload="auto" controls controlsList="nodownload"></video></div>'+note;
+    var va=document.getElementById('k-indvid'); if(va) va.addEventListener('ended',function(){ renderQuiz(); });
     return;
   }
   panel.innerHTML='<div class="vid-wrap"><video id="k-indvid" src="'+esc(url)+'" playsinline preload="auto" controlsList="nodownload noplaybackrate noremoteplayback" disablepictureinpicture></video></div><div style="display:flex;gap:10px;align-items:center;margin-top:8px;"><button type="button" class="btn primary" id="k-vid-toggle">▶ Play induction video</button><span id="k-vid-time" class="muted" style="font-size:12px;"></span></div>'+note;
@@ -1611,7 +1695,13 @@ async function kioskSubmit(){
   }catch(_){}
   b.disabled=false; b.textContent=(purpose==='Contractor')?'Submit permit & Time In':'Submit Time In';
   if(!okDone){ return fail('Could not sign in. Please tell reception.'); }
-  kioskDone('You are signed in', purpose==='Contractor' ? ('Permit logged. Welcome, '+esc(name2)+'. Please report to your site contact.') : ('Welcome, '+esc(name2)+'. Enjoy your visit.'));
+  var indMsg='';
+  if(inductionDone) indMsg='✓ <b>Safety induction successful.</b><br>';
+  else if(_permitState.ind==='No' && _permitState.mode==='office') indMsg='Please complete your induction at the <b>safety office</b>.<br>';
+  var body = (purpose==='Contractor')
+    ? (indMsg+'✓ <b>Work permit submitted for approval</b> — you will be emailed once it is approved.<br>Welcome, '+esc(name2)+'. Please report to your site contact.')
+    : (indMsg+'✓ <b>Site access registration approved.</b><br>Welcome, '+esc(name2)+'. Enjoy your visit.');
+  kioskDone('You are signed in', body);
 }
 async function kioskSignOutList(){
   var list=[];
