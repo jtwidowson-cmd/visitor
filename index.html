@@ -658,6 +658,8 @@ window.__sbLoad = (window.supabase) ? Promise.resolve(true) : new Promise(functi
             <div class="grid2"><div><label>Name</label><input id="al-name"></div><div><label>Email</label><input id="al-email" type="email"></div></div>
             <label>Temporary password</label>
             <div style="display:flex;gap:8px;"><input id="al-pass" style="flex:1;"><button class="btn sm" id="al-gen" type="button">Generate</button></div>
+            <label style="margin-top:10px;display:block;">Role for this app <span class="muted">(grants access to THIS app only)</span></label>
+            <select id="al-role" style="width:100%;"><option value="officer">Officer</option><option value="viewer">Viewer</option><option value="admin">Admin</option></select>
             <button class="btn primary" id="al-add" style="margin-top:12px;">Create login</button>
             <div id="al-msg" class="ok"></div>
           </div>
@@ -1398,7 +1400,11 @@ document.getElementById('al-add').addEventListener('click', async function(){
     var r=await Promise.race([ sb.functions.invoke('admin-members',{body:{action:'create',email:email,password:pass,name:name}}), race ]);
     if(r.__t){ msg.textContent='Timed out — please try again.'; b.disabled=false; return; }
     if(r.error || !(r.data && r.data.ok)){ msg.textContent=(r.data&&r.data.error)||'Could not create login.'; b.disabled=false; return; }
-    msg.style.color='var(--green)'; msg.textContent='Login created for '+email+'.'; document.getElementById('al-name').value=''; document.getElementById('al-email').value=''; document.getElementById('al-pass').value=''; renderCompanyUsers();
+    // Per-app: grant THIS app's access only. The new login is added to this app and NO other app.
+    var _role=(document.getElementById('al-role')||{}).value||'officer';
+    var _granted=false;
+    if(r.data.id){ try{ var sr=await sb.rpc('set_app_role',{p_profile:r.data.id,p_app:APP_KEY,p_role:_role}); _granted=!(sr&&sr.error); }catch(_){ } }
+    msg.style.color='var(--green)'; msg.textContent=_granted?('Login created and added to this app ('+_role+') for '+email+'. Access to THIS app only.'):('Login created for '+email+'. Set their role in the list to grant this app.'); document.getElementById('al-name').value=''; document.getElementById('al-email').value=''; document.getElementById('al-pass').value=''; renderCompanyUsers();
   }catch(_){ msg.textContent='Could not create login.'; }
   b.disabled=false;
 });
