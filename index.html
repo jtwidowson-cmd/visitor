@@ -1380,15 +1380,48 @@ document.getElementById('cu-regen').addEventListener('click', async function(){ 
 async function renderCompanyUsers(){
   var tb=document.getElementById('co-users-table'); if(!tb) return;
   var mainAdmin=false; try{ var ma=await sb.rpc('is_company_main_admin'); mainAdmin=(ma.data===true); }catch(_){}
-  var users=[]; try{ var r=await sb.from('profiles').select('id,name,email,role'); if(!r.error&&r.data) users=r.data; }catch(_){}
+  var users=[]; try{ var r=await sb.from('profiles').select('id,name,email,role,created_at').order('created_at',{ascending:true}); if(!r.error&&r.data) users=r.data; }catch(_){}
   var appRoles={}; try{ var ra=await sb.from('app_roles').select('user_id,role').eq('app_key',APP_KEY); if(!ra.error&&ra.data){ ra.data.forEach(function(x){ appRoles[x.user_id]=x.role; }); } }catch(_){}
+  var mainId=users.length?users[0].id:null;
   function roleOf(u){ return appRoles[u.id]||''; }
   var roles=['','viewer','officer','admin'];
   function rlbl(r){ return r?(r.charAt(0).toUpperCase()+r.slice(1)):'— No access —'; }
-  tb.innerHTML=users.length?'<div class="muted" style="font-size:11.5px;margin-bottom:6px;">Roles &amp; removal here apply to <b>this app only</b> — it does not touch the person’s access in other apps. Only the <b>main admin</b> can fully delete an account (all apps).</div><table><tbody>'+users.map(function(u){var ur=roleOf(u);return '<tr><td><div style="font-weight:600;">'+esc(u.name||'—')+'</div><div class="muted" style="font-size:11.5px;">'+esc(u.email||'')+'</div></td><td><select class="mrole" data-uid="'+esc(u.id)+'">'+roles.map(function(r){return '<option value="'+r+'"'+(ur===r?' selected':'')+'>'+rlbl(r)+'</option>';}).join('')+'</select></td><td style="text-align:right;">'+((u.id!==myId)?'<button class="btn sm" data-remove="'+esc(u.id)+'" data-name="'+esc(u.name||u.email||'')+'" title="Remove from this app only" style="border-color:var(--red);color:var(--red);">Remove</button>':'')+((mainAdmin&&u.id!==myId)?' <button class="btn sm" data-del="'+esc(u.id)+'" data-name="'+esc(u.name||u.email||'')+'" title="Delete whole account - all apps" style="font-size:11px;opacity:.7;">Delete account</button>':'')+'</td></tr>';}).join('')+'</tbody></table>':'<div class="empty">No team members yet.</div>';
-  tb.querySelectorAll('select[data-uid]').forEach(function(sel){ var prev=sel.value; sel.addEventListener('change',async function(){ sel.disabled=true; var v=sel.value; var r=v?(await sb.rpc('set_app_role',{p_profile:sel.dataset.uid,p_app:APP_KEY,p_role:v})):(await sb.rpc('clear_app_role',{p_profile:sel.dataset.uid,p_app:APP_KEY})); sel.disabled=false; if(r.error){toast(r.error.message||'Admins only.');sel.value=prev;return;} toast(v?'Role updated for this app.':'Removed from this app.'); }); });
-  tb.querySelectorAll('[data-remove]').forEach(function(b){ b.addEventListener('click',async function(){ if(!confirm('Remove '+(b.dataset.name||'this member')+' from this app only?\n\nThey keep their login and access to other apps. You can add them back anytime.'))return; b.disabled=true; var r=await sb.rpc('clear_app_role',{p_profile:b.dataset.remove,p_app:APP_KEY}); b.disabled=false; if(r&&r.error){toast(r.error.message||'Admins only.');return;} toast('Removed from this app only - other apps unchanged.'); renderCompanyUsers(); }); });
-  tb.querySelectorAll('[data-del]').forEach(function(b){ b.addEventListener('click',async function(){ if(!confirm('DELETE the whole account for '+b.dataset.name+'?\\n\\nThis removes their login from EVERY app and cannot be undone.'))return; b.disabled=true; var ok=false; try{ var r=await sb.functions.invoke('admin-members',{body:{action:'delete',id:b.dataset.del}}); if(!r.error&&r.data&&r.data.ok){ok=true;} else if(r.data&&r.data.error){toast(r.data.error);b.disabled=false;return;} }catch(_){} if(!ok){ toast('Could not delete — main admin only.'); b.disabled=false; return; } toast('Account deleted (all apps).'); renderCompanyUsers(); }); });
+  function tag(u){ return u.id===mainId?'<span class="pill" style="background:var(--blue);color:#fff;">Main admin</span>':(roleOf(u)==='admin'?'<span class="pill">Admin</span>':''); }
+  var members=users.filter(function(u){ return roleOf(u)!==''; });
+  var admins=users.filter(function(u){ return u.id===mainId || roleOf(u)==='admin'; });
+  var adminsHtml=admins.length?admins.map(function(u){ return '<div style="display:flex;justify-content:space-between;align-items:center;gap:8px;padding:4px 0;border-bottom:1px solid var(--line);"><div><b>'+esc(u.name||'—')+'</b> <span class="muted" style="font-size:11.5px;">'+esc(u.email||'')+'</span></div>'+tag(u)+'</div>'; }).join(''):'<div class="muted" style="font-size:12px;">No admins yet.</div>';
+  var membersHtml=members.length?members.map(function(u){ return '<div style="display:flex;justify-content:space-between;align-items:center;gap:8px;padding:3px 0;"><div>'+esc(u.name||'—')+' <span class="muted" style="font-size:11.5px;">'+esc(u.email||'')+'</span></div><span class="muted" style="font-size:12px;">'+esc(rlbl(roleOf(u)))+'</span></div>'; }).join(''):'<div class="muted" style="font-size:12px;">No one has access to this app yet.</div>';
+  function optFor(u){ return '<option value="'+esc(u.id)+'">'+esc((u.name||u.email||'—'))+(roleOf(u)?(' — '+rlbl(roleOf(u))):' — No access')+'</option>'; }
+  tb.innerHTML=
+    '<div class="muted" style="font-size:11.5px;margin-bottom:8px;">Roles &amp; removal here apply to <b>this app only</b>. Only the <b>main admin</b> can fully delete an account (all apps).</div>'+
+    '<div class="sec-h" style="font-size:12.5px;">Admins &amp; main admin</div><div id="cu-admins" style="margin-bottom:12px;">'+adminsHtml+'</div>'+
+    '<div class="sec-h" style="font-size:12.5px;">Members with access ('+members.length+')</div><div id="cu-members" style="margin-bottom:12px;">'+membersHtml+'</div>'+
+    '<div class="sec-h" style="font-size:12.5px;">Manage a member</div>'+
+    '<input id="cu-search" placeholder="Search name or email…" style="width:100%;margin-bottom:6px;">'+
+    '<select id="cu-select" style="width:100%;"><option value="">Select a person…</option>'+users.map(optFor).join('')+'</select>'+
+    '<div id="cu-manage" style="margin-top:8px;"></div>';
+  var search=document.getElementById('cu-search'), sel=document.getElementById('cu-select'), manage=document.getElementById('cu-manage');
+  if(search) search.addEventListener('input',function(){ var q=(search.value||'').toLowerCase(); sel.innerHTML='<option value="">Select a person…</option>'+users.filter(function(u){ return !q || ((u.name||'')+' '+(u.email||'')).toLowerCase().indexOf(q)>=0; }).map(optFor).join(''); manage.innerHTML=''; });
+  function renderManage(){
+    var uid=sel.value; if(!uid){ manage.innerHTML=''; return; }
+    var u=users.filter(function(x){return x.id===uid;})[0]; if(!u){ manage.innerHTML=''; return; }
+    var ur=roleOf(u), isSelf=(uid===myId), isMain=(uid===mainId);
+    manage.innerHTML='<div style="border:1px solid var(--line);border-radius:8px;padding:10px;">'+
+      '<div style="font-weight:600;margin-bottom:6px;">'+esc(u.name||u.email||'—')+' '+tag(u)+'</div>'+
+      '<label style="font-size:11.5px;">Role in this app</label>'+
+      '<select id="cu-role"'+(isMain?' disabled':'')+' style="width:100%;">'+roles.map(function(r){ return '<option value="'+r+'"'+(ur===r?' selected':'')+'>'+rlbl(r)+'</option>'; }).join('')+'</select>'+
+      '<div style="display:flex;gap:8px;margin-top:10px;flex-wrap:wrap;">'+
+        ((!isSelf&&!isMain)?'<button class="btn sm" id="cu-remove" style="border-color:var(--red);color:var(--red);">Remove from this app</button>':'')+
+        ((mainAdmin&&!isSelf&&!isMain)?'<button class="btn sm" id="cu-delacct" style="font-size:11px;opacity:.7;">Delete account (all apps)</button>':'')+
+      '</div>'+(isMain?'<div class="muted" style="font-size:11px;margin-top:6px;">The main admin cannot be removed here.</div>':'')+'</div>';
+    var rl=document.getElementById('cu-role');
+    if(rl) rl.addEventListener('change',async function(){ rl.disabled=true; var v=rl.value; var r=v?(await sb.rpc('set_app_role',{p_profile:uid,p_app:APP_KEY,p_role:v})):(await sb.rpc('clear_app_role',{p_profile:uid,p_app:APP_KEY})); rl.disabled=false; if(r&&r.error){toast(r.error.message||'Admins only.');return;} toast(v?'Role updated for this app.':'Removed from this app.'); renderCompanyUsers(); });
+    var rm=document.getElementById('cu-remove');
+    if(rm) rm.addEventListener('click',async function(){ if(!confirm('Remove '+(u.name||u.email||'this member')+' from this app only?\n\nThey keep their login and access to other apps.'))return; rm.disabled=true; var r=await sb.rpc('clear_app_role',{p_profile:uid,p_app:APP_KEY}); rm.disabled=false; if(r&&r.error){toast(r.error.message||'Admins only.');return;} toast('Removed from this app only — other apps unchanged.'); renderCompanyUsers(); });
+    var da=document.getElementById('cu-delacct');
+    if(da) da.addEventListener('click',async function(){ if(!confirm('DELETE the whole account for '+(u.name||u.email)+'?\n\nThis removes their login from EVERY app and cannot be undone.'))return; da.disabled=true; var ok=false; try{ var r=await sb.functions.invoke('admin-members',{body:{action:'delete',id:uid}}); if(!r.error&&r.data&&r.data.ok){ok=true;} else if(r.data&&r.data.error){toast(r.data.error);da.disabled=false;return;} }catch(_){} if(!ok){ toast('Could not delete — main admin only.'); da.disabled=false; return; } toast('Account deleted (all apps).'); renderCompanyUsers(); });
+  }
+  if(sel) sel.addEventListener('change',renderManage);
 }
 document.getElementById('al-gen').addEventListener('click',function(){ var lo='abcdefghijkmnpqrstuvwxyz',up='ABCDEFGHJKLMNPQRSTUVWXYZ',dg='23456789'; function p(s){return s[Math.floor(Math.random()*s.length)];} var b=p(up)+p(lo)+p(dg),all=lo+up+dg; for(var i=0;i<7;i++)b+=p(all); document.getElementById('al-pass').value=b.split('').sort(function(){return Math.random()-.5;}).join(''); });
 document.getElementById('al-add').addEventListener('click', async function(){
@@ -1534,8 +1567,8 @@ function kioskSignIn(){
     '<div id="k-maint"></div>'+
     '<label>Vehicle plate number'+(needVeh?' *':'')+'</label><input id="k-veh" placeholder="ABC 1234 / N/A">'+
     '<label>Contact number *</label><input id="k-phone" placeholder="0917XXXXXXX">'+
-    '<label>Email address *</label><input id="k-email" type="email" placeholder="you@email.com" autocomplete="email">'+
-    '<div class="muted" style="font-size:11.5px;margin-top:-2px;">We’ll email you a confirmation of your site access and safety induction.</div>'+
+    '<div id="k-email-wrap" style="display:none;"><label>Email address *</label><input id="k-email" type="email" placeholder="you@email.com" autocomplete="email">'+
+    '<div class="muted" style="font-size:11.5px;margin-top:-2px;">We’ll email you a confirmation of your site access and safety induction.</div></div>'+
     (needInd?'<label>Site induction — please read</label><div class="induction-box">'+esc(info.induction_text)+((info.emergency_text||'').trim()?'\n\nEMERGENCY:\n'+esc(info.emergency_text):'')+'</div><label class="ack"><input type="checkbox" id="k-ack"> I have read and understood the site rules and emergency procedures.</label>':'')+
     '<div id="k-sigzone" style="margin-top:4px;"></div>'+
     '<div style="display:flex;gap:10px;margin-top:16px;"><button class="btn full" id="k-cancel">Cancel</button><button class="btn green full" id="k-submit">Submit Time In</button></div><div id="k-msg" class="err"></div>';
@@ -1555,6 +1588,7 @@ function wireTri(root){ if(!root) return; root.querySelectorAll('.tri').forEach(
 function renderPermit(){
   var box=document.getElementById('k-maint'); var p=document.getElementById('k-purpose').value;
   document.getElementById('k-submit').textContent=(p==='Contractor')?'Submit permit & Time In':'Submit Time In';
+  var _ew=document.getElementById('k-email-wrap'); if(_ew){ _ew.style.display=(p==='Visitor'||p==='Contractor')?'block':'none'; }
   var sz=document.getElementById('k-sigzone');
   if(!p){ box.innerHTML=''; if(sz) sz.innerHTML=''; return; }
   _permitState={ind:'',mode:'',passed:false,tri:{},sig:null}; _visitType='';
@@ -1570,7 +1604,6 @@ function renderPermit(){
 }
 function wpContractorCard(){
   return '<div class="pcard"><div class="ph">🛠️ Contractor Work Permit</div>'+
-    '<label>Applicant email *</label><input id="k-wemail" type="email" placeholder="you@company.com">'+
     '<label>Type of work permit *</label><select id="k-wtype">'+WP_TYPES.map(function(t){return '<option>'+esc(t)+'</option>';}).join('')+'</select>'+
     '<label>Description of work *</label><input id="k-wdesc" placeholder="e.g. replace conveyor bearing">'+
     '<label>Exact location / area *</label><input id="k-wloc" list="k-wloc-list" placeholder="Select or type a location">'+
@@ -1636,12 +1669,15 @@ function showInductionVideo(){
   }
   // Public: native controls give a Fullscreen button + play/pause, while the seek-lock
   // below still stops skipping ahead (a forward drag snaps back to the furthest watched).
-  panel.innerHTML='<div class="vid-wrap"><video id="k-indvid" src="'+esc(url)+'" playsinline preload="auto" controls controlsList="nodownload noplaybackrate noremoteplayback" disablepictureinpicture></video></div>'+note;
-  var v=document.getElementById('k-indvid'); var maxT=0;
-  v.addEventListener('timeupdate',function(){ if(!v.seeking && v.currentTime>maxT) maxT=v.currentTime; });
-  v.addEventListener('seeking',function(){ if(v.currentTime>maxT+0.5){ v.currentTime=maxT; } });
+  // Public visitors: NO native seek bar at all — they physically cannot fast-forward.
+  // Only admins/main-admins review with full controls (the KMODE==='admin' branch above).
+  panel.innerHTML='<div class="vid-wrap"><video id="k-indvid" src="'+esc(url)+'" playsinline preload="auto" controlsList="nodownload noplaybackrate noremoteplayback" disablepictureinpicture></video></div>'+
+    '<div style="display:flex;align-items:center;gap:10px;margin-top:8px;"><button type="button" id="k-vid-play" class="btn primary sm">▶ Play</button><div style="flex:1;height:6px;background:var(--line);border-radius:4px;overflow:hidden;"><div id="k-vid-prog" style="height:100%;width:0;background:var(--green);transition:width .2s;"></div></div></div>'+note;
+  var v=document.getElementById('k-indvid'); var pbtn=document.getElementById('k-vid-play'); var prog=document.getElementById('k-vid-prog');
+  if(pbtn) pbtn.addEventListener('click',function(){ if(v.paused){ v.play(); pbtn.textContent='⏸ Pause'; } else { v.pause(); pbtn.textContent='▶ Play'; } });
+  v.addEventListener('timeupdate',function(){ if(v.duration && prog){ prog.style.width=Math.min(100,(v.currentTime/v.duration*100))+'%'; } });
   v.addEventListener('ratechange',function(){ if(v.playbackRate!==1) v.playbackRate=1; });
-  v.addEventListener('ended',function(){ renderQuiz(); });
+  v.addEventListener('ended',function(){ if(pbtn) pbtn.textContent='▶ Replay'; renderQuiz(); });
 }
 function renderQuiz(){
   var box=document.getElementById('k-ind-quiz'); if(!box) return;
@@ -1698,7 +1734,9 @@ async function kioskSubmit(){
   var loggedPurpose=(purpose==='Visitor' && _visitType)?_visitType:purpose;
   var phoneEl=document.getElementById('k-phone'); if(phoneEl && !phoneEl.value.trim()){ return fail('Please enter your contact number.'); }
   var emailEl=document.getElementById('k-email'); var vEmail=emailEl?emailEl.value.trim():'';
-  if(!/^[^@\s]+@[^@\s]+\.[^@\s]+$/.test(vEmail)){ return fail('Please enter a valid email address.'); }
+  var _emailReq=(purpose==='Visitor'||purpose==='Contractor');
+  if(_emailReq && !/^[^@\s]+@[^@\s]+\.[^@\s]+$/.test(vEmail)){ return fail('Please enter a valid email address.'); }
+  if(!_emailReq) vEmail='';
   if(_permitState.ind===''){ return fail('Please answer the safety induction question.'); }
   if(_permitState.ind==='No' && _permitState.mode!=='office' && !_permitState.passed){ return fail('Complete the induction video and questions, or choose the safety office.'); }
   var attendees=[]; var attInputs=document.querySelectorAll('#k-att-list .k-att-name'); if(attInputs.length){ attInputs.forEach(function(el){ var vv=(el.value||'').trim(); if(vv) attendees.push(vv); }); } else { var attEl=document.getElementById('k-ind-att'); if(attEl){ attendees=attEl.value.split(/\n|,/).map(function(x){return x.trim();}).filter(Boolean); } }
@@ -1711,7 +1749,7 @@ async function kioskSubmit(){
   var inductionDone=(_permitState.ind==='Yes')||(_permitState.passed===true);
   var details={ signature:_permitState.sig, induction_done:inductionDone, induction_mode:(_permitState.ind==='Yes'?'prior':(_permitState.ind==='N/A'?'not_required':(_permitState.mode||''))), gdpr_ack:true, truth_ack:true, attendees:attendees, visit_type:(_visitType||''), inspection_ack:(_visitType==='Inspection'||_visitType==='Meeting'), email:vEmail }, permitPayload=null;
   if(purpose==='Contractor'){
-    var wemail=(document.getElementById('k-wemail')||{}).value||'';
+    var wemail=vEmail;
     var desc=(document.getElementById('k-wdesc')||{}).value||'', loc=(document.getElementById('k-wloc')||{}).value||'';
     var wtype=(document.getElementById('k-wtype')||{}).value||WP_TYPES[0];
     if(!/^[^@\s]+@[^@\s]+\.[^@\s]+$/.test(wemail)){ return fail('Enter a valid applicant email.'); }
