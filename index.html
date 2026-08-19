@@ -47,6 +47,9 @@ body.kiosk-live #jtThemeBtn{display:none!important;}
   .cs-grid{ column-width:330px; column-gap:16px; }
   .cs-grid > .card{ break-inside:avoid; -webkit-column-break-inside:avoid; page-break-inside:avoid; margin:0 0 16px; display:block; }
   @media(max-width:640px){ .cs-grid{ column-width:auto; column-count:1; } }
+
+  .cs-wide{ display:grid; grid-template-columns:1.5fr 1fr; gap:16px; align-items:start; margin-top:16px; }
+  @media(max-width:860px){ .cs-wide{ grid-template-columns:1fr; } }
 </style>
 <script>(function(){
   var EMB=window.top!==window.self;
@@ -621,13 +624,21 @@ window.__sbLoad = (window.supabase) ? Promise.resolve(true) : new Promise(functi
           <div id="cs-permit-msg" class="ok"></div>
         </div>
           <div class="card">
-          <div class="sec-h">Contractor permit checklists</div>
-          <div class="muted" style="font-size:12px;margin-bottom:8px;">Edit the checklist a contractor must complete for each work-permit type. Add or remove items. Leave a type untouched to keep the built-in defaults.</div>
-          <label>Permit type</label><select id="pc-type"></select>
-          <div id="pc-editor"></div>
-          <button class="btn" id="pc-add" type="button" style="margin-top:8px;">+ Add checklist item</button>
-          <button class="btn primary" id="pc-save" type="button" style="margin-top:12px;">Save checklist</button>
+          <div class="sec-h">Kiosk QR &amp; Sites</div>
+          <button class="btn" id="open-kioskrules" type="button">🖥️ Kiosk QR code</button>
+          <button class="btn" id="open-sites" type="button" style="margin-top:8px;">📍 Sites / locations</button>
         </div>
+          <div class="card">
+          <div class="sec-h">Dashboard photo widgets</div>
+          <div class="muted" style="font-size:13px;margin-bottom:8px;">Add site photos shown on the Dashboard header (e.g. site map, muster point).</div>
+          <div style="display:flex;gap:8px;align-items:center;flex-wrap:wrap;">
+            <input type="file" id="wg-file" accept="image/*" style="flex:1;min-width:180px;">
+            <button class="btn sm" id="wg-add" type="button">Add photo</button>
+          </div>
+          <div id="wg-list" style="display:flex;gap:10px;flex-wrap:wrap;margin-top:12px;"></div>
+        </div>
+        </div>
+        <div class="cs-wide">
           <div class="card">
           <div class="sec-h">Safety induction &amp; declarations</div>
           <label>Induction / site rules</label><textarea id="se-induction" rows="4" placeholder="e.g. All visitors must be accompanied. PPE required in marked areas…"></textarea>
@@ -655,18 +666,12 @@ window.__sbLoad = (window.supabase) ? Promise.resolve(true) : new Promise(functi
           <button class="btn primary" id="se-save" style="margin-top:16px;">Save induction &amp; declarations</button>
         </div>
           <div class="card">
-          <div class="sec-h">Kiosk QR &amp; Sites</div>
-          <button class="btn" id="open-kioskrules" type="button">🖥️ Kiosk QR code</button>
-          <button class="btn" id="open-sites" type="button" style="margin-top:8px;">📍 Sites / locations</button>
-        </div>
-          <div class="card">
-          <div class="sec-h">Dashboard photo widgets</div>
-          <div class="muted" style="font-size:13px;margin-bottom:8px;">Add site photos shown on the Dashboard header (e.g. site map, muster point).</div>
-          <div style="display:flex;gap:8px;align-items:center;flex-wrap:wrap;">
-            <input type="file" id="wg-file" accept="image/*" style="flex:1;min-width:180px;">
-            <button class="btn sm" id="wg-add" type="button">Add photo</button>
-          </div>
-          <div id="wg-list" style="display:flex;gap:10px;flex-wrap:wrap;margin-top:12px;"></div>
+          <div class="sec-h">Contractor permit checklists</div>
+          <div class="muted" style="font-size:12px;margin-bottom:8px;">Edit the checklist a contractor must complete for each work-permit type. Add or remove items. Leave a type untouched to keep the built-in defaults.</div>
+          <label>Permit type</label><select id="pc-type"></select>
+          <div id="pc-editor"></div>
+          <button class="btn" id="pc-add" type="button" style="margin-top:8px;">+ Add checklist item</button>
+          <button class="btn primary" id="pc-save" type="button" style="margin-top:12px;">Save checklist</button>
         </div>
         </div>
       </section>
