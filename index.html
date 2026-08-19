@@ -42,6 +42,11 @@
 #jtThemeBtn{bottom:calc(14px + env(safe-area-inset-bottom));}
 body.kiosk-live #jtThemeBtn{display:none!important;}
 @media(max-width:900px){#jtThemeBtn{display:flex;}}
+
+  /* Compact multi-column Company Setup (masonry) */
+  .cs-grid{ column-width:330px; column-gap:16px; }
+  .cs-grid > .card{ break-inside:avoid; -webkit-column-break-inside:avoid; page-break-inside:avoid; margin:0 0 16px; display:block; }
+  @media(max-width:640px){ .cs-grid{ column-width:auto; column-count:1; } }
 </style>
 <script>(function(){
   var EMB=window.top!==window.self;
@@ -575,7 +580,31 @@ window.__sbLoad = (window.supabase) ? Promise.resolve(true) : new Promise(functi
 
       <!-- COMPANY SETUP -->
       <section class="view" id="v-company">
-        <div class="card">
+        <div class="cs-grid">
+          <div class="card">
+            <div class="sec-h">Company details</div>
+            <label>Company name</label><input id="cu-name">
+            <label>Reminder email</label><input id="cu-email" type="email">
+            <button class="btn primary" id="cu-save" style="margin-top:12px;">Save</button>
+            <hr style="border:none;border-top:1px solid var(--line);margin:16px 0;">
+            <div class="sec-h">Invite code</div>
+            <div class="muted" style="font-size:13px;">Share so your team can Join.</div>
+            <div style="display:flex;gap:8px;align-items:center;margin-top:6px;"><b id="cu-invite" style="font-family:var(--mono);font-size:16px;">—</b><button class="btn sm" id="cu-regen">Regenerate</button></div>
+          </div>
+          <div class="card">
+            <div class="sec-h">Team &amp; logins</div>
+            <div id="co-users-table"></div>
+            <hr style="border:none;border-top:1px solid var(--line);margin:16px 0;">
+            <div class="sec-h">Add an employee login</div>
+            <div class="grid2"><div><label>Name</label><input id="al-name"></div><div><label>Email</label><input id="al-email" type="email"></div></div>
+            <label>Temporary password</label>
+            <div style="display:flex;gap:8px;"><input id="al-pass" style="flex:1;"><button class="btn sm" id="al-gen" type="button">Generate</button></div>
+            <label style="margin-top:10px;display:block;">Role for this app <span class="muted">(grants access to THIS app only)</span></label>
+            <select id="al-role" style="width:100%;"><option value="officer">Officer</option><option value="viewer">Viewer</option><option value="admin">Admin</option></select>
+            <button class="btn primary" id="al-add" style="margin-top:12px;">Create login</button>
+            <div id="al-msg" class="ok"></div>
+          </div>
+          <div class="card">
           <div class="sec-h">Permit approval workflow</div>
           <div class="muted" style="font-size:13px;margin-bottom:8px;">Add up to 6 approver emails. When a permit is submitted, all of them get an email and can Approve or Reject straight from it — the first decision is final. The applicant enters their own email on each permit.</div>
           <label>Permit Approver emails (up to 6)</label>
@@ -591,16 +620,15 @@ window.__sbLoad = (window.supabase) ? Promise.resolve(true) : new Promise(functi
           <button class="btn primary" id="cs-permit-save" style="margin-top:12px;">Save permit workflow</button>
           <div id="cs-permit-msg" class="ok"></div>
         </div>
-        <div class="card">
-          <div class="sec-h">Dashboard photo widgets</div>
-          <div class="muted" style="font-size:13px;margin-bottom:8px;">Add site photos shown on the Dashboard header (e.g. site map, muster point).</div>
-          <div style="display:flex;gap:8px;align-items:center;flex-wrap:wrap;">
-            <input type="file" id="wg-file" accept="image/*" style="flex:1;min-width:180px;">
-            <button class="btn sm" id="wg-add" type="button">Add photo</button>
-          </div>
-          <div id="wg-list" style="display:flex;gap:10px;flex-wrap:wrap;margin-top:12px;"></div>
+          <div class="card">
+          <div class="sec-h">Contractor permit checklists</div>
+          <div class="muted" style="font-size:12px;margin-bottom:8px;">Edit the checklist a contractor must complete for each work-permit type. Add or remove items. Leave a type untouched to keep the built-in defaults.</div>
+          <label>Permit type</label><select id="pc-type"></select>
+          <div id="pc-editor"></div>
+          <button class="btn" id="pc-add" type="button" style="margin-top:8px;">+ Add checklist item</button>
+          <button class="btn primary" id="pc-save" type="button" style="margin-top:12px;">Save checklist</button>
         </div>
-        <div class="card">
+          <div class="card">
           <div class="sec-h">Safety induction &amp; declarations</div>
           <label>Induction / site rules</label><textarea id="se-induction" rows="4" placeholder="e.g. All visitors must be accompanied. PPE required in marked areas…"></textarea>
           <label>Emergency information</label><textarea id="se-emergency" rows="2" placeholder="e.g. On the alarm, assemble at the car park."></textarea>
@@ -626,43 +654,20 @@ window.__sbLoad = (window.supabase) ? Promise.resolve(true) : new Promise(functi
           <div id="se-iq-editor"></div>
           <button class="btn primary" id="se-save" style="margin-top:16px;">Save induction &amp; declarations</button>
         </div>
-        <div class="card">
-          <div class="sec-h">Contractor permit checklists</div>
-          <div class="muted" style="font-size:12px;margin-bottom:8px;">Edit the checklist a contractor must complete for each work-permit type. Add or remove items. Leave a type untouched to keep the built-in defaults.</div>
-          <label>Permit type</label><select id="pc-type"></select>
-          <div id="pc-editor"></div>
-          <button class="btn" id="pc-add" type="button" style="margin-top:8px;">+ Add checklist item</button>
-          <button class="btn primary" id="pc-save" type="button" style="margin-top:12px;">Save checklist</button>
-        </div>
-        <div class="card">
+          <div class="card">
           <div class="sec-h">Kiosk QR &amp; Sites</div>
           <button class="btn" id="open-kioskrules" type="button">🖥️ Kiosk QR code</button>
           <button class="btn" id="open-sites" type="button" style="margin-top:8px;">📍 Sites / locations</button>
         </div>
-        <div class="grid2">
           <div class="card">
-            <div class="sec-h">Company details</div>
-            <label>Company name</label><input id="cu-name">
-            <label>Reminder email</label><input id="cu-email" type="email">
-            <button class="btn primary" id="cu-save" style="margin-top:12px;">Save</button>
-            <hr style="border:none;border-top:1px solid var(--line);margin:16px 0;">
-            <div class="sec-h">Invite code</div>
-            <div class="muted" style="font-size:13px;">Share so your team can Join.</div>
-            <div style="display:flex;gap:8px;align-items:center;margin-top:6px;"><b id="cu-invite" style="font-family:var(--mono);font-size:16px;">—</b><button class="btn sm" id="cu-regen">Regenerate</button></div>
+          <div class="sec-h">Dashboard photo widgets</div>
+          <div class="muted" style="font-size:13px;margin-bottom:8px;">Add site photos shown on the Dashboard header (e.g. site map, muster point).</div>
+          <div style="display:flex;gap:8px;align-items:center;flex-wrap:wrap;">
+            <input type="file" id="wg-file" accept="image/*" style="flex:1;min-width:180px;">
+            <button class="btn sm" id="wg-add" type="button">Add photo</button>
           </div>
-          <div class="card">
-            <div class="sec-h">Team &amp; logins</div>
-            <div id="co-users-table"></div>
-            <hr style="border:none;border-top:1px solid var(--line);margin:16px 0;">
-            <div class="sec-h">Add an employee login</div>
-            <div class="grid2"><div><label>Name</label><input id="al-name"></div><div><label>Email</label><input id="al-email" type="email"></div></div>
-            <label>Temporary password</label>
-            <div style="display:flex;gap:8px;"><input id="al-pass" style="flex:1;"><button class="btn sm" id="al-gen" type="button">Generate</button></div>
-            <label style="margin-top:10px;display:block;">Role for this app <span class="muted">(grants access to THIS app only)</span></label>
-            <select id="al-role" style="width:100%;"><option value="officer">Officer</option><option value="viewer">Viewer</option><option value="admin">Admin</option></select>
-            <button class="btn primary" id="al-add" style="margin-top:12px;">Create login</button>
-            <div id="al-msg" class="ok"></div>
-          </div>
+          <div id="wg-list" style="display:flex;gap:10px;flex-wrap:wrap;margin-top:12px;"></div>
+        </div>
         </div>
       </section>
 
@@ -1386,42 +1391,22 @@ async function renderCompanyUsers(){
   function roleOf(u){ return appRoles[u.id]||''; }
   var roles=['','viewer','officer','admin'];
   function rlbl(r){ return r?(r.charAt(0).toUpperCase()+r.slice(1)):'— No access —'; }
-  function tag(u){ return u.id===mainId?'<span class="pill" style="background:var(--blue);color:#fff;">Main admin</span>':(roleOf(u)==='admin'?'<span class="pill">Admin</span>':''); }
-  var members=users.filter(function(u){ return roleOf(u)!==''; });
-  var admins=users.filter(function(u){ return u.id===mainId || roleOf(u)==='admin'; });
-  var adminsHtml=admins.length?admins.map(function(u){ return '<div style="display:flex;justify-content:space-between;align-items:center;gap:8px;padding:4px 0;border-bottom:1px solid var(--line);"><div><b>'+esc(u.name||'—')+'</b> <span class="muted" style="font-size:11.5px;">'+esc(u.email||'')+'</span></div>'+tag(u)+'</div>'; }).join(''):'<div class="muted" style="font-size:12px;">No admins yet.</div>';
-  var membersHtml=members.length?members.map(function(u){ return '<div style="display:flex;justify-content:space-between;align-items:center;gap:8px;padding:3px 0;"><div>'+esc(u.name||'—')+' <span class="muted" style="font-size:11.5px;">'+esc(u.email||'')+'</span></div><span class="muted" style="font-size:12px;">'+esc(rlbl(roleOf(u)))+'</span></div>'; }).join(''):'<div class="muted" style="font-size:12px;">No one has access to this app yet.</div>';
-  function optFor(u){ return '<option value="'+esc(u.id)+'">'+esc((u.name||u.email||'—'))+(roleOf(u)?(' — '+rlbl(roleOf(u))):' — No access')+'</option>'; }
+  function badge(u){ return u.id===mainId?' <span class="pill" style="background:var(--blue);color:#fff;font-size:10px;">Main admin</span>':(roleOf(u)==='admin'?' <span class="pill" style="font-size:10px;">Admin</span>':''); }
+  var members=users.filter(function(u){ return roleOf(u)!=='' || u.id===mainId; });
+  var head='<tr style="position:sticky;top:0;background:var(--panel-2);z-index:1;"><th style="text-align:left;padding:6px 8px;font-size:11px;text-transform:uppercase;color:var(--paper-dim);">Name / Email</th><th style="padding:6px 8px;font-size:11px;text-transform:uppercase;color:var(--paper-dim);">Role</th><th style="padding:6px 8px;"></th></tr>';
+  var body=members.length?members.map(function(u){
+    var isMain=(u.id===mainId), isSelf=(u.id===myId), ur=roleOf(u);
+    var roleSel='<select class="mrole" data-uid="'+esc(u.id)+'"'+(isMain?' disabled':'')+' style="min-width:0;width:100%;">'+roles.map(function(rr){return '<option value="'+rr+'"'+(ur===rr?' selected':'')+'>'+rlbl(rr)+'</option>';}).join('')+'</select>';
+    var rm=(!isSelf&&!isMain)?'<button class="btn sm" data-remove="'+esc(u.id)+'" data-name="'+esc(u.name||u.email||'')+'" title="Remove from this app only" style="border-color:var(--red);color:var(--red);padding:4px 6px;font-size:11px;">Remove</button>':'';
+    var da=(mainAdmin&&!isSelf&&!isMain)?'<button class="btn sm" data-del="'+esc(u.id)+'" data-name="'+esc(u.name||u.email||'')+'" title="Delete whole account - all apps" style="font-size:10px;opacity:.7;padding:4px 6px;">Delete acct</button>':'';
+    return '<tr style="border-top:1px solid var(--line);"><td style="padding:6px 8px;overflow:hidden;"><div style="font-weight:600;white-space:nowrap;overflow:hidden;text-overflow:ellipsis;">'+esc(u.name||'—')+badge(u)+'</div><div class="muted" style="font-size:11px;white-space:nowrap;overflow:hidden;text-overflow:ellipsis;">'+esc(u.email||'')+'</div></td><td style="padding:6px 6px;vertical-align:top;">'+roleSel+'</td><td style="padding:6px 6px;vertical-align:top;"><div style="display:flex;flex-direction:column;gap:4px;align-items:stretch;">'+rm+da+'</div></td></tr>';
+  }).join(''):'<tr><td colspan="3" class="muted" style="padding:10px;text-align:center;">No one has access to this app yet.</td></tr>';
   tb.innerHTML=
-    '<div class="muted" style="font-size:11.5px;margin-bottom:8px;">Roles &amp; removal here apply to <b>this app only</b>. Only the <b>main admin</b> can fully delete an account (all apps).</div>'+
-    '<div class="sec-h" style="font-size:12.5px;">Admins &amp; main admin</div><div id="cu-admins" style="margin-bottom:12px;">'+adminsHtml+'</div>'+
-    '<div class="sec-h" style="font-size:12.5px;">Members with access ('+members.length+')</div><div id="cu-members" style="margin-bottom:12px;">'+membersHtml+'</div>'+
-    '<div class="sec-h" style="font-size:12.5px;">Manage a member</div>'+
-    '<input id="cu-search" placeholder="Search name or email…" style="width:100%;margin-bottom:6px;">'+
-    '<select id="cu-select" style="width:100%;"><option value="">Select a person…</option>'+users.map(optFor).join('')+'</select>'+
-    '<div id="cu-manage" style="margin-top:8px;"></div>';
-  var search=document.getElementById('cu-search'), sel=document.getElementById('cu-select'), manage=document.getElementById('cu-manage');
-  if(search) search.addEventListener('input',function(){ var q=(search.value||'').toLowerCase(); sel.innerHTML='<option value="">Select a person…</option>'+users.filter(function(u){ return !q || ((u.name||'')+' '+(u.email||'')).toLowerCase().indexOf(q)>=0; }).map(optFor).join(''); manage.innerHTML=''; });
-  function renderManage(){
-    var uid=sel.value; if(!uid){ manage.innerHTML=''; return; }
-    var u=users.filter(function(x){return x.id===uid;})[0]; if(!u){ manage.innerHTML=''; return; }
-    var ur=roleOf(u), isSelf=(uid===myId), isMain=(uid===mainId);
-    manage.innerHTML='<div style="border:1px solid var(--line);border-radius:8px;padding:10px;">'+
-      '<div style="font-weight:600;margin-bottom:6px;">'+esc(u.name||u.email||'—')+' '+tag(u)+'</div>'+
-      '<label style="font-size:11.5px;">Role in this app</label>'+
-      '<select id="cu-role"'+(isMain?' disabled':'')+' style="width:100%;">'+roles.map(function(r){ return '<option value="'+r+'"'+(ur===r?' selected':'')+'>'+rlbl(r)+'</option>'; }).join('')+'</select>'+
-      '<div style="display:flex;gap:8px;margin-top:10px;flex-wrap:wrap;">'+
-        ((!isSelf&&!isMain)?'<button class="btn sm" id="cu-remove" style="border-color:var(--red);color:var(--red);">Remove from this app</button>':'')+
-        ((mainAdmin&&!isSelf&&!isMain)?'<button class="btn sm" id="cu-delacct" style="font-size:11px;opacity:.7;">Delete account (all apps)</button>':'')+
-      '</div>'+(isMain?'<div class="muted" style="font-size:11px;margin-top:6px;">The main admin cannot be removed here.</div>':'')+'</div>';
-    var rl=document.getElementById('cu-role');
-    if(rl) rl.addEventListener('change',async function(){ rl.disabled=true; var v=rl.value; var r=v?(await sb.rpc('set_app_role',{p_profile:uid,p_app:APP_KEY,p_role:v})):(await sb.rpc('clear_app_role',{p_profile:uid,p_app:APP_KEY})); rl.disabled=false; if(r&&r.error){toast(r.error.message||'Admins only.');return;} toast(v?'Role updated for this app.':'Removed from this app.'); renderCompanyUsers(); });
-    var rm=document.getElementById('cu-remove');
-    if(rm) rm.addEventListener('click',async function(){ if(!confirm('Remove '+(u.name||u.email||'this member')+' from this app only?\n\nThey keep their login and access to other apps.'))return; rm.disabled=true; var r=await sb.rpc('clear_app_role',{p_profile:uid,p_app:APP_KEY}); rm.disabled=false; if(r&&r.error){toast(r.error.message||'Admins only.');return;} toast('Removed from this app only — other apps unchanged.'); renderCompanyUsers(); });
-    var da=document.getElementById('cu-delacct');
-    if(da) da.addEventListener('click',async function(){ if(!confirm('DELETE the whole account for '+(u.name||u.email)+'?\n\nThis removes their login from EVERY app and cannot be undone.'))return; da.disabled=true; var ok=false; try{ var r=await sb.functions.invoke('admin-members',{body:{action:'delete',id:uid}}); if(!r.error&&r.data&&r.data.ok){ok=true;} else if(r.data&&r.data.error){toast(r.data.error);da.disabled=false;return;} }catch(_){} if(!ok){ toast('Could not delete — main admin only.'); da.disabled=false; return; } toast('Account deleted (all apps).'); renderCompanyUsers(); });
-  }
-  if(sel) sel.addEventListener('change',renderManage);
+    '<div class="muted" style="font-size:11px;margin-bottom:6px;">Roles &amp; removal here apply to <b>this app only</b>. Only the <b>main admin</b> can fully delete an account (all apps).</div>'+
+    '<div style="overflow:auto;max-height:320px;border:1px solid var(--line);border-radius:8px;"><table style="width:100%;border-collapse:collapse;font-size:12px;table-layout:fixed;"><colgroup><col style="width:44%"><col style="width:32%"><col style="width:24%"></colgroup><thead>'+head+'</thead><tbody>'+body+'</tbody></table></div>';
+  tb.querySelectorAll('select[data-uid]').forEach(function(sel){ var prev=sel.value; sel.addEventListener('change',async function(){ sel.disabled=true; var v=sel.value; var uid=sel.dataset.uid; var r=v?(await sb.rpc('set_app_role',{p_profile:uid,p_app:APP_KEY,p_role:v})):(await sb.rpc('clear_app_role',{p_profile:uid,p_app:APP_KEY})); sel.disabled=false; if(r&&r.error){toast(r.error.message||'Admins only.');sel.value=prev;return;} toast(v?'Role updated for this app.':'Removed from this app.'); renderCompanyUsers(); }); });
+  tb.querySelectorAll('[data-remove]').forEach(function(b){ b.addEventListener('click',async function(){ if(!confirm('Remove '+(b.dataset.name||'this member')+' from this app only?\n\nThey keep their login and access to other apps.'))return; b.disabled=true; var r=await sb.rpc('clear_app_role',{p_profile:b.dataset.remove,p_app:APP_KEY}); b.disabled=false; if(r&&r.error){toast(r.error.message||'Admins only.');return;} toast('Removed from this app only — other apps unchanged.'); renderCompanyUsers(); }); });
+  tb.querySelectorAll('[data-del]').forEach(function(b){ b.addEventListener('click',async function(){ if(!confirm('DELETE the whole account for '+b.dataset.name+'?\n\nThis removes their login from EVERY app and cannot be undone.'))return; b.disabled=true; var ok=false; try{ var r=await sb.functions.invoke('admin-members',{body:{action:'delete',id:b.dataset.del}}); if(!r.error&&r.data&&r.data.ok){ok=true;} else if(r.data&&r.data.error){toast(r.data.error);b.disabled=false;return;} }catch(_){} if(!ok){ toast('Could not delete — main admin only.'); b.disabled=false; return; } toast('Account deleted (all apps).'); renderCompanyUsers(); }); });
 }
 document.getElementById('al-gen').addEventListener('click',function(){ var lo='abcdefghijkmnpqrstuvwxyz',up='ABCDEFGHJKLMNPQRSTUVWXYZ',dg='23456789'; function p(s){return s[Math.floor(Math.random()*s.length)];} var b=p(up)+p(lo)+p(dg),all=lo+up+dg; for(var i=0;i<7;i++)b+=p(all); document.getElementById('al-pass').value=b.split('').sort(function(){return Math.random()-.5;}).join(''); });
 document.getElementById('al-add').addEventListener('click', async function(){
