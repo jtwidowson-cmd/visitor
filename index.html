@@ -105,6 +105,49 @@ window.__sbLoad = (window.supabase) ? Promise.resolve(true) : new Promise(functi
 });
 </script>
 <script src="https://cdn.jsdelivr.net/npm/qrcode-generator@1.4.4/qrcode.js"></script>
+<!-- Cloudflare Turnstile — anti-bot challenge on auth actions. Shares the same widget
+     (site key) as the other JT.3rDegre3 apps so tokens validate against the one captcha
+     secret in Supabase. Third-party security widget on a rolling URL, so no SRI. -->
+<script src="https://challenges.cloudflare.com/turnstile/v0/api.js?render=explicit&onload=__onTurnstileLoad" defer></script>
+<script>
+window.TS_SITEKEY='0x4AAAAAAEwAZznM_FZOjpYF';
+window.__tsId=null; window.__tsToken=''; window.__tsWaiters=[];
+function __tsResolveAll(t){
+  window.__tsToken=t||'';
+  var list=window.__tsWaiters; window.__tsWaiters=[];
+  for(var i=0;i<list.length;i++){ try{ list[i](window.__tsToken); }catch(_){} }
+}
+window.__renderTurnstile=function(){
+  if(window.__tsId!==null || typeof turnstile==='undefined') return;
+  if(!document.getElementById('tsCaptcha')){ document.addEventListener('DOMContentLoaded', window.__renderTurnstile, {once:true}); return; }
+  try{
+    window.__tsId=turnstile.render('#tsCaptcha',{
+      sitekey:window.TS_SITEKEY, appearance:'interaction-only',
+      callback:function(t){ __tsResolveAll(t); },
+      'error-callback':function(){ __tsResolveAll(''); return true; },
+      'expired-callback':function(){ window.__tsToken=''; }
+    });
+  }catch(_){ window.__tsId=null; }
+};
+window.__onTurnstileLoad=function(){ window.__renderTurnstile(); };
+/* Fresh single-use captcha token, or '' if Turnstile can't load (app then behaves as
+   before — safe until CAPTCHA is switched on in Supabase). Hands out the current token,
+   then resets so the next call gets a new one. */
+window.getCaptchaToken=function(){
+  return new Promise(function(resolve){
+    if(typeof turnstile==='undefined'){ resolve(''); return; }
+    if(window.__tsId===null) window.__renderTurnstile();
+    if(window.__tsId===null){ resolve(''); return; }
+    var done=false;
+    function give(t){ if(done) return; done=true; resolve(t||''); try{ turnstile.reset(window.__tsId); window.__tsToken=''; }catch(_){} }
+    var cur=''; try{ cur=turnstile.getResponse(window.__tsId)||''; }catch(_){}
+    if(!cur) cur=window.__tsToken||'';
+    if(cur){ give(cur); return; }
+    window.__tsWaiters.push(give);
+    setTimeout(function(){ if(!done){ done=true; resolve(''); } }, 12000);
+  });
+};
+</script>
 <style>
   :root{
     --ink:#eef1f4; --panel:#ffffff; --panel-2:#eef1f5; --line:#d5dae0;
@@ -433,6 +476,7 @@ window.__sbLoad = (window.supabase) ? Promise.resolve(true) : new Promise(functi
 <div id="printArea"></div>
 
 <!-- ============ LOGIN (admin) ============ -->
+<div id="tsCaptcha" style="position:fixed;left:50%;top:16px;transform:translateX(-50%);z-index:100000;"></div>
 <div id="loginOverlay" class="overlay">
   <div class="login-card">
     <img id="loginLogo" class="brand-logo" alt="JT.3rDegre3">
@@ -770,22 +814,26 @@ function setMode(m){
   document.getElementById('loginSub').textContent = m==='company'?'Create your company account':m==='join'?'Join your company':m==='reset'?'Reset your password':m==='newpass'?'Set a new password':'Sign in to your account';
 }
 document.getElementById('signinForm').addEventListener('submit', async function(e){ e.preventDefault(); var er=document.getElementById('liErr'); er.textContent='';
-  var r=await sb.auth.signInWithPassword({email:document.getElementById('liEmail').value.trim(),password:document.getElementById('liPass').value});
+  var captchaToken=await getCaptchaToken();
+  var r=await sb.auth.signInWithPassword({email:document.getElementById('liEmail').value.trim(),password:document.getElementById('liPass').value,options:{captchaToken}});
   if(r.error){ er.textContent=r.error.message; return; } location.reload();
 });
 document.getElementById('companyForm').addEventListener('submit', async function(e){ e.preventDefault(); var er=document.getElementById('coErr'); er.textContent='';
   var em=document.getElementById('coEmail').value.trim(), pw=document.getElementById('coPass').value;
   if(pw.length<8){ er.textContent='Password must be at least 8 characters.'; return; }
-  var r=await sb.auth.signUp({email:em,password:pw,options:{data:{signup_type:'company',company_name:document.getElementById('coName').value.trim(),full_name:document.getElementById('coFull').value.trim(),activation_code:document.getElementById('coCode').value.trim()}}});
+  var captchaToken=await getCaptchaToken();
+  var r=await sb.auth.signUp({email:em,password:pw,options:{captchaToken,data:{signup_type:'company',company_name:document.getElementById('coName').value.trim(),full_name:document.getElementById('coFull').value.trim(),activation_code:document.getElementById('coCode').value.trim()}}});
   if(r.error){ er.textContent=r.error.message; return; } er.style.color='var(--green)'; er.textContent='Account created — signing you in…'; setTimeout(function(){location.reload();},1200);
 });
 document.getElementById('joinForm').addEventListener('submit', async function(e){ e.preventDefault(); var er=document.getElementById('jnErr'); er.textContent='';
   var pw=document.getElementById('jnPass').value; if(pw.length<8){ er.textContent='Password must be at least 8 characters.'; return; }
-  var r=await sb.auth.signUp({email:document.getElementById('jnEmail').value.trim(),password:pw,options:{data:{signup_type:'join',invite_code:document.getElementById('jnCode').value.trim(),full_name:document.getElementById('jnFull').value.trim()}}});
+  var captchaToken=await getCaptchaToken();
+  var r=await sb.auth.signUp({email:document.getElementById('jnEmail').value.trim(),password:pw,options:{captchaToken,data:{signup_type:'join',invite_code:document.getElementById('jnCode').value.trim(),full_name:document.getElementById('jnFull').value.trim()}}});
   if(r.error){ er.textContent=r.error.message; return; } er.style.color='var(--green)'; er.textContent='Account created — signing you in…'; setTimeout(function(){location.reload();},1200);
 });
 document.getElementById('resetForm').addEventListener('submit', async function(e){ e.preventDefault(); var m=document.getElementById('rsMsg'); m.style.color='var(--paper-dim)';
-  var r=await sb.auth.resetPasswordForEmail(document.getElementById('rsEmail').value.trim(),{redirectTo:location.origin+location.pathname});
+  var captchaToken=await getCaptchaToken();
+  var r=await sb.auth.resetPasswordForEmail(document.getElementById('rsEmail').value.trim(),{redirectTo:location.origin+location.pathname,captchaToken});
   m.textContent = r.error? r.error.message : 'If that email has an account, a reset link is on its way.';
 });
 document.getElementById('newpassForm').addEventListener('submit', async function(e){ e.preventDefault(); var m=document.getElementById('npMsg'); m.style.color='var(--red)';
@@ -1079,7 +1127,7 @@ function confirmAdminPassword(actionLabel,onOk){
   var html='<h3 style="margin-top:0;">Admin confirmation</h3><div class="muted" style="font-size:13px;margin-bottom:8px;">Enter your account password to '+esc(actionLabel)+'.</div><label>Password</label><input type="password" id="cap-pass" autocomplete="current-password"><div id="cap-msg" class="err" style="margin-top:6px;"></div><div style="display:flex;gap:8px;margin-top:14px;justify-content:flex-end;"><button class="btn sm" id="cap-cancel" type="button">Cancel</button><button class="btn red sm" id="cap-ok" type="button">Confirm</button></div>';
   showModal(html,function(root){ var pass=root.querySelector('#cap-pass'); if(pass) pass.focus();
     root.querySelector('#cap-cancel').addEventListener('click',closeModal);
-    root.querySelector('#cap-ok').addEventListener('click',async function(){ var pw=(pass&&pass.value)||''; var msg=root.querySelector('#cap-msg'); if(pw.length<1){ msg.style.color='var(--red)'; msg.textContent='Password required.'; return; } this.disabled=true; msg.style.color='var(--paper-dim)'; msg.textContent='Verifying\u2026'; var ok=false; try{ var r=await sb.auth.signInWithPassword({email:userEmail,password:pw}); ok=!r.error && !!(r.data&&r.data.session); }catch(_){} if(!ok){ msg.style.color='var(--red)'; msg.textContent='Wrong password.'; this.disabled=false; return; } closeModal(); onOk(); });
+    root.querySelector('#cap-ok').addEventListener('click',async function(){ var pw=(pass&&pass.value)||''; var msg=root.querySelector('#cap-msg'); if(pw.length<1){ msg.style.color='var(--red)'; msg.textContent='Password required.'; return; } this.disabled=true; msg.style.color='var(--paper-dim)'; msg.textContent='Verifying\u2026'; var ok=false; try{ var captchaToken=await getCaptchaToken(); var r=await sb.auth.signInWithPassword({email:userEmail,password:pw,options:{captchaToken}}); ok=!r.error && !!(r.data&&r.data.session); }catch(_){} if(!ok){ msg.style.color='var(--red)'; msg.textContent='Wrong password.'; this.disabled=false; return; } closeModal(); onOk(); });
   });
 }
 async function deleteVisit(id){
